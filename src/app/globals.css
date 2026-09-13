@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/*
+ * Tokens, and not one colour.
+ *
+ * Every value below is an indirection to a custom property that `layout.tsx`
+ * injects from the active brand's config. That is deliberate and it is the
+ * reason one build can serve any shop: Tailwind compiles `.bg-brand-400` to
+ * `var(--color-brand-400)`, which resolves to `var(--brand-400)`, which the
+ * shop's own config supplies at render time.
+ *
+ * Put a hex here and it compiles into the CSS bundle, and the system is a site
+ * again rather than a template. `tests/no-brand-literals.test.ts` fails on one.
+ */
+@theme {
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+
+  --color-ink-900: var(--ink-900);
+  --color-ink-800: var(--ink-800);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+
+  --color-paper-50: var(--paper-50);
+  --color-paper-100: var(--paper-100);
+  --color-paper-200: var(--paper-200);
+
+  --color-alt-a: var(--alt-a);
+  --color-alt-b: var(--alt-b);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-on-accent: var(--on-accent-token);
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono-stack);
+}
+
+/*
+ * Roles.
+ *
+ * Components name these and never the ramp above, so "what is the page
+ * background" has one answer that both themes agree on. A component that
+ * reaches past this layer for `paper-50` directly is a component that breaks
+ * in dark mode.
+ */
+:root {
+  --ground: var(--paper-50);
+  --surface: var(--paper-100);
+  --sunken: var(--paper-200);
+  --line: var(--paper-200);
+  --line-strong: var(--ink-400);
+  --fg: var(--ink-900);
+  --fg-muted: var(--ink-500);
+  --fg-faint: var(--ink-400);
+  --accent: var(--brand-600);
+  --accent-rule: var(--brand-500);
+  --accent-fill: var(--brand-400);
+  --on-accent: var(--on-accent-token);
+  --state-ok: var(--ok);
+  --state-warn: var(--warn);
+  --state-bad: var(--bad);
+  color-scheme: light;
+}
+
+/*
+ * Three states, not two: an explicit choice stamps the root, and the default
+ * "system" stamps nothing — so the media query has to carry the un-stamped
+ * case while still losing to an explicit light choice.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: var(--ink-900);
+    --surface: var(--ink-800);
+    --sunken: var(--ink-700);
+    --line: var(--ink-700);
+    --line-strong: var(--ink-500);
+    --fg: var(--paper-100);
+    --fg-muted: var(--paper-200);
+    --fg-faint: var(--ink-400);
+    --accent: var(--brand-400);
+    --accent-rule: var(--brand-400);
+    --accent-fill: var(--brand-400);
+    --on-accent: var(--on-accent-token);
+    --state-ok: var(--ok-lift);
+    --state-warn: var(--warn-lift);
+    --state-bad: var(--bad-lift);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: var(--ink-900);
+  --surface: var(--ink-800);
+  --sunken: var(--ink-700);
+  --line: var(--ink-700);
+  --line-strong: var(--ink-500);
+  --fg: var(--paper-100);
+  --fg-muted: var(--paper-200);
+  --fg-faint: var(--ink-400);
+  --accent: var(--brand-400);
+  --accent-rule: var(--brand-400);
+  --accent-fill: var(--brand-400);
+  --on-accent: var(--on-accent-token);
+  --state-ok: var(--ok-lift);
+  --state-warn: var(--warn-lift);
+  --state-bad: var(--bad-lift);
+  color-scheme: dark;
+}
+
+body {
+  background: var(--ground);
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+/* Figures that sit in columns line up on the decimal, everywhere. */
+.tabular { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
