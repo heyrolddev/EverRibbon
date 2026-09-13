@@ -31,6 +31,24 @@ names what it left and the file fails `npm test` until a person has looked.
 That refusal is the point. A codemod that silently half-converts is worse than
 none, because the diff looks finished.
 
+## Deployment storage
+
+Every push builds a deployment and nothing removes the old ones, so a few
+hundred pushes is several gigabytes of function storage — a housekeeping
+problem that looks like a plan limit.
+
+```bash
+export VERCEL_TOKEN=...                             # from Vercel > Settings > Tokens
+node scripts/vercel-cleanup.mjs --project <name>    # dry run: changes nothing
+node scripts/vercel-cleanup.mjs --project <name> --yes
+```
+
+It never deletes the deployment serving production (read from the project
+rather than guessed), anything a domain points at, the newest few production
+builds, or anything it cannot confidently classify. Those rules are tested in
+`tests/vercel-cleanup.test.ts` rather than trusted, because the cost of one
+wrong delete is a live business going offline.
+
 ## The one rule
 
 **`src/` may read the config. It may never contain a shop's name, its currency
@@ -98,6 +116,7 @@ scripts/
   palette.mjs      grows an 11-step ramp from one colour, in OKLCH
   port.mjs         carries a module over from the original codebase, de-branded
   token-map.json   old colour token -> new, decided by measuring the palettes
+  vercel-cleanup.mjs  deletes old deployments without taking the shop offline
 src/
   app/             routes, and globals.css — tokens, no values
   lib/format.ts    money, dates, durations, in the shop's own terms
