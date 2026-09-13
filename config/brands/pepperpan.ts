@@ -24,11 +24,34 @@ export const pepperpan: BrandConfig = {
 
   locale: "en-PH",
   timeZone: "Asia/Manila",
-  currency: { code: "PHP", symbol: "\u20b1", decimals: 2 },
+  currency: { code: "PHP", symbol: "\u20b1", ascii: "P", decimals: 2 },
 
   // A stall hands the food over now. No deposit, no proof, no capacity calendar.
   fulfillment: "immediate",
   deposit: { percent: 0, coolingOffMinutes: 0 },
+
+  contact: {
+    street: "In front of Palengkeni (New Apalit Public Market), beside Osave!",
+    locality: "Apalit",
+    region: "Pampanga",
+    country: "PH",
+    phone: "+63 947 353 3060",
+    phoneHref: "+639473533060",
+    priceRange: "\u20b1\u20b1",
+    // The pin the owner dropped on their own business listing, to the metre.
+    lat: 14.9531856,
+    lng: 120.7576564,
+    // Addressed by the listing's own id. The URL copied out of the map app is
+    // a place name, a viewport, a zoom level and four tracking parameters
+    // wrapped around this one number, and all of that goes stale.
+    mapUrl: "https://maps.google.com/?cid=13918401762537882815",
+  },
+
+  socials: [
+    { name: "Facebook", href: "https://www.facebook.com/profile.php?id=61591109867523", handle: "Pepper Pan" },
+    { name: "Instagram", href: "https://www.instagram.com/pepperpan.taiwanstylefood", handle: "@pepperpan.taiwanstylefood" },
+    { name: "TikTok", href: "https://www.tiktok.com/@pepper.pan.taiwan", handle: "@pepper.pan.taiwan" },
+  ],
 
   palette: {
     "brand-50": "#FFF3F1", "brand-100": "#FFE4DF", "brand-200": "#FFCAC2", "brand-300": "#FFA89C", "brand-400": "#FF8072", "brand-500": "#FF463B",

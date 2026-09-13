@@ -68,6 +68,15 @@ export type BrandConfig = {
     code: string;
     /** What a person sees. */
     symbol: string;
+    /**
+     * The same symbol in plain ASCII.
+     *
+     * A thermal receipt printer speaks a code page from the 1990s and renders
+     * anything outside it as a black block or, worse, as one byte of a
+     * multi-byte character that shifts every column after it. So receipts fold
+     * to ASCII before they are sent, and this is what the symbol folds to.
+     */
+    ascii: string;
     decimals: number;
   };
 
@@ -95,6 +104,40 @@ export type BrandConfig = {
     coolingOffMinutes: number;
   };
 
+  /**
+   * Where the shop physically is, and where it posts.
+   *
+   * This is what a search engine and a chat app ask for before they will show
+   * a pasted link as anything but bare text — and for a shop that markets on
+   * Messenger and TikTok, that is the difference between a naked URL and a
+   * card with a photo and a reason to tap.
+   *
+   * `lat`/`lng` are a fact about the business, deliberately kept apart from
+   * whatever origin delivery fees are measured from: one only changes if the
+   * shop physically moves, the other is a pricing knob someone adjusts on a
+   * Tuesday. Reading the first out of the second means anyone nudging delivery
+   * silently moves where the business claims to be.
+   */
+  contact: {
+    street: string;
+    locality: string;
+    region: string;
+    /** ISO 3166-1 alpha-2. */
+    country: string;
+    phone: string;
+    /** The same number, dial-able: no spaces, no punctuation. */
+    phoneHref: string;
+    /** As a search engine grades it — "$$", "₱₱". */
+    priceRange: string;
+    lat: number;
+    lng: number;
+    /** The map listing addressed by its own id, not by a copied viewport URL. */
+    mapUrl: string;
+  };
+
+  /** Rendered in this order, so put the one the shop actually uses first. */
+  socials: { name: string; href: string; handle: string }[];
+
   palette: Palette;
   roles: Roles;
   fonts: {
@@ -120,6 +163,8 @@ export function validateBrand(b: BrandConfig): BrandConfig {
 
   if (!/^[a-z][a-z0-9-]*$/.test(b.key)) fail("key must be lowercase kebab-case");
   if (!b.currency?.symbol) fail("currency.symbol is required");
+  if (!b.currency?.ascii?.trim()) fail("currency.ascii is required — receipts cannot print the symbol");
+  if (/[^\x20-\x7E]/.test(b.currency.ascii)) fail("currency.ascii must be plain ASCII");
   if (!/^[A-Z]{3}$/.test(b.currency?.code ?? "")) fail("currency.code must be a 3-letter ISO code");
   if (!Number.isInteger(b.currency.decimals) || b.currency.decimals < 0 || b.currency.decimals > 4)
     fail("currency.decimals must be 0-4");
@@ -154,6 +199,24 @@ export function validateBrand(b: BrandConfig): BrandConfig {
 
   for (const k of ["display","body","mono"] as const)
     if (!b.fonts?.[k]?.trim()) fail(`fonts.${k} is required`);
+
+  const c = b.contact;
+  for (const k of ["street","locality","region","country","phone","phoneHref"] as const)
+    if (!c?.[k]?.trim()) fail(`contact.${k} is required`);
+  if (!/^\+?[0-9]+$/.test(c.phoneHref)) fail("contact.phoneHref must be dial-able: digits and an optional +");
+  if (!/^[A-Z]{2}$/.test(c.country)) fail("contact.country must be a 2-letter ISO code");
+  if (!Number.isFinite(c.lat) || Math.abs(c.lat) > 90) fail("contact.lat must be a latitude");
+  if (!Number.isFinite(c.lng) || Math.abs(c.lng) > 180) fail("contact.lng must be a longitude");
+
+  if (!Array.isArray(b.socials)) fail("socials must be an array (empty is fine)");
+  for (const s of b.socials) {
+    if (!s?.name?.trim() || !s?.handle?.trim()) fail("every social needs a name and a handle");
+    // A URL copied out of an app carries that share's tracking, which would
+    // then sit in the shop's markup telling every visitor it once scanned its
+    // own QR code. Strip it back to the plain profile address.
+    if (!/^https:\/\//.test(s.href ?? "")) fail(`social "${s.name}" needs an https URL`);
+    if (/[?&](utm_|igsi|sender_device|_rdc|mibextid)/.test(s.href)) fail(`social "${s.name}" still carries share tracking`);
+  }
 
   return b;
 }

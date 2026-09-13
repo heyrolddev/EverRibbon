@@ -30,7 +30,7 @@ export const everribbon: BrandConfig = {
 
   locale: "en-PH",
   timeZone: "Asia/Manila",
-  currency: { code: "PHP", symbol: "₱", decimals: 2 },
+  currency: { code: "PHP", symbol: "₱", ascii: "P", decimals: 2 },
 
   fulfillment: "made_to_order",
   deposit: {
@@ -40,6 +40,21 @@ export const everribbon: BrandConfig = {
     // due date. This is the window in which either side can still walk away.
     coolingOffMinutes: 20,
   },
+
+  contact: {
+    street: "Apalit",
+    locality: "Apalit",
+    region: "Pampanga",
+    country: "PH",
+    phone: "+63 947 353 3060",
+    phoneHref: "+639473533060",
+    priceRange: "\u20b1\u20b1",
+    lat: 14.9531856,
+    lng: 120.7576564,
+    mapUrl: "https://maps.google.com/?cid=13918401762537882815",
+  },
+
+  socials: [],
 
   palette: {
     "brand-50": "#FCF5E4", "brand-100": "#F7EAC9", "brand-200": "#EDD79E", "brand-300": "#DFBF6A", "brand-400": "#C9A227", "brand-500": "#B48E00",

@@ -21,6 +21,16 @@ npm run lint
 npm run check     # all three, which is what CI runs
 ```
 
+## Porting the rest
+
+`scripts/port.mjs <path>` carries a module over from the codebase this was
+extracted from, rewriting colour tokens, money formatting, timezones and
+import paths on the way. What it cannot decide it refuses to guess at — it
+names what it left and the file fails `npm test` until a person has looked.
+
+That refusal is the point. A codemod that silently half-converts is worse than
+none, because the diff looks finished.
+
 ## The one rule
 
 **`src/` may read the config. It may never contain a shop's name, its currency
@@ -86,6 +96,8 @@ config/          what a shop is. The only place a brand fact may live.
   brands/          one file per shop
 scripts/
   palette.mjs      grows an 11-step ramp from one colour, in OKLCH
+  port.mjs         carries a module over from the original codebase, de-branded
+  token-map.json   old colour token -> new, decided by measuring the palettes
 src/
   app/             routes, and globals.css — tokens, no values
   lib/format.ts    money, dates, durations, in the shop's own terms
