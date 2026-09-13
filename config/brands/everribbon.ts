@@ -6,17 +6,20 @@ import type { BrandConfig } from "../schema.ts";
  * The palette is not invented. Every colour below is a ribbon or foil the shop
  * already buys, so the brand and the purchase order cannot drift apart:
  *
- *   brand-400  Shecan Special Foils, Bright Gold 100mm   the metallic
- *   brand-600  4 cm GOLDEN                              gold that reads as text
- *   ink-900    Black Shecan Ribbons 80mm                warm, never #000
- *   paper-50   Cream Shecan Ribbons 38mm                ivory, never white
- *   alt-a      2.5 cm BURGANDY
- *   alt-b      Moss Green Shecan Ribbons 25mm
+ *   brand   Shecan Special Foils, Bright Gold 100mm
+ *   ink     Black Shecan Ribbons 80mm — warm, never #000
+ *   paper   Cream Shecan Ribbons 38mm — ivory, never white
+ *   ok      Moss Green Shecan Ribbons 25mm
  *
- * Two constraints are load-bearing and `tests/palette.test.ts` enforces both:
- * metallic gold measures 2.28 against ivory, so it can never carry text — hence
- * the separate 500 and 600 steps. And because the brand IS gold, the warning
- * colour cannot be amber or it reads as brand; alarm is terracotta here.
+ * Each ramp is grown from that one colour by `scripts/palette.mjs`, so all
+ * seven share a lightness curve and a `600` weighs the same whichever it is.
+ *
+ * Two constraints are load-bearing, and `tests/palette.test.ts` enforces both.
+ * Metallic gold measures 2.28 against ivory, so it can never carry text — that
+ * is why text takes brand-700 while the fill stays at 400. And because the
+ * brand IS gold, the warning colour cannot be amber or it reads as brand
+ * rather than as alarm; terracotta takes that job, and plum is the accent
+ * precisely because it sits far from both the gold and the two reds.
  */
 export const everribbon: BrandConfig = {
   key: "everribbon",
@@ -39,18 +42,24 @@ export const everribbon: BrandConfig = {
   },
 
   palette: {
-    "brand-200": "#EFE0B4", "brand-300": "#E0C877", "brand-400": "#C9A227",
-    "brand-500": "#AD8A1E", "brand-600": "#8C6E16", "brand-700": "#6E5610",
-    "ink-900": "#12100B", "ink-800": "#1C1913", "ink-700": "#2A251C",
-    "ink-500": "#4A4234", "ink-400": "#6B6154",
-    "paper-50": "#FBF8F1", "paper-100": "#F4EFE3", "paper-200": "#E7E0CE",
-    "on-accent": "#12100B",
-    "alt-a": "#7B2B3B", "alt-a-lift": "#C2606F",
-    "alt-b": "#5A6B4A", "alt-b-lift": "#7E9169",
-    "ok": "#3F6B4A", "ok-lift": "#6FAE81",
-    "warn": "#9C4A1E", "warn-lift": "#D1783F",
-    "bad": "#96242B", "bad-lift": "#DC6068",
+    "brand-50": "#FCF5E4", "brand-100": "#F7EAC9", "brand-200": "#EDD79E", "brand-300": "#DFBF6A", "brand-400": "#C9A227", "brand-500": "#B48E00",
+    "brand-600": "#947400", "brand-700": "#765C00", "brand-800": "#584400", "brand-900": "#3B2C00", "brand-950": "#241A00",   // anchor #C9A227 at 400
+    "accent-50": "#FFF1FA", "accent-100": "#FFE0F5", "accent-200": "#FBC6EB", "accent-300": "#F1A7DC", "accent-400": "#E288CA", "accent-500": "#CC6CB3",
+    "accent-600": "#AD5396", "accent-700": "#8C3E79", "accent-800": "#6B2D5C", "accent-900": "#481B3D", "accent-950": "#2C0F25",   // anchor #6B2D5C at 800
+    "ink-50": "#F7F6F3", "ink-100": "#EDEBE5", "ink-200": "#DCD8CF", "ink-300": "#C7C2B5", "ink-400": "#B1AB9B", "ink-500": "#9A9382",
+    "ink-600": "#7F7868", "ink-700": "#655F51", "ink-800": "#4B463B", "ink-900": "#312E26", "ink-950": "#12100B",   // anchor #12100B at 950
+    "paper-50": "#FBF8F1", "paper-100": "#F0EADD", "paper-200": "#E2D8C2", "paper-300": "#CFC1A2", "paper-400": "#BBAA83", "paper-500": "#A39268",
+    "paper-600": "#887750", "paper-700": "#6C5E3C", "paper-800": "#51452A", "paper-900": "#362E1A", "paper-950": "#201B0E",   // anchor #FBF8F1 at 50
+    "ok-50": "#F0F8F1", "ok-100": "#E0F0E2", "ok-200": "#C5E1CB", "ok-300": "#A6CEAF", "ok-400": "#88BA93", "ok-500": "#6DA279",
+    "ok-600": "#548760", "ok-700": "#3F6B4A", "ok-800": "#2D5036", "ok-900": "#1C3522", "ok-950": "#0F2013",   // anchor #3F6B4A at 700
+    "warn-50": "#FFF3EE", "warn-100": "#FFE5D9", "warn-200": "#FFCCB5", "warn-300": "#FBAD89", "warn-400": "#EE9062", "warn-500": "#D87442",
+    "warn-600": "#B85A28", "warn-700": "#9C4A1E", "warn-800": "#72310B", "warn-900": "#4D1F05", "warn-950": "#301103",   // anchor #9C4A1E at 700
+    "bad-50": "#FFF2F1", "bad-100": "#FFE3E1", "bad-200": "#FFCAC6", "bad-300": "#FFA8A3", "bad-400": "#FF7F7D", "bad-500": "#EA6061",
+    "bad-600": "#C84549", "bad-700": "#96242B", "bad-800": "#7C2125", "bad-900": "#551316", "bad-950": "#350A0B",   // anchor #96242B at 700
   },
+
+  /* Gold is at its most itself as a 400, which takes near-black on top. */
+  roles: { accentFill: "brand-400", onAccent: "ink-950" },
 
   fonts: {
     // A didone — the letterform of engraved invitations, and the printed cousin

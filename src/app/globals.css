@@ -4,38 +4,100 @@
  * Tokens, and not one colour.
  *
  * Every value below is an indirection to a custom property that `layout.tsx`
- * injects from the active brand's config. That is deliberate and it is the
- * reason one build can serve any shop: Tailwind compiles `.bg-brand-400` to
- * `var(--color-brand-400)`, which resolves to `var(--brand-400)`, which the
- * shop's own config supplies at render time.
+ * injects from the active brand. That is the reason one build can serve any
+ * shop: Tailwind compiles `.bg-brand-400` to `var(--color-brand-400)`, which
+ * resolves to `var(--brand-400)`, which the shop supplies at render time.
  *
- * Put a hex here and it compiles into the CSS bundle, and the system is a site
- * again rather than a template. `tests/no-brand-literals.test.ts` fails on one.
+ * Put a hex here and it compiles into the CSS bundle, and the system is one
+ * shop's website again. `tests/no-brand-literals.test.ts` fails on one.
  */
 @theme {
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
   --color-brand-200: var(--brand-200);
   --color-brand-300: var(--brand-300);
   --color-brand-400: var(--brand-400);
   --color-brand-500: var(--brand-500);
   --color-brand-600: var(--brand-600);
   --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
 
-  --color-ink-900: var(--ink-900);
-  --color-ink-800: var(--ink-800);
-  --color-ink-700: var(--ink-700);
-  --color-ink-500: var(--ink-500);
+  --color-accent-50: var(--accent-50);
+  --color-accent-100: var(--accent-100);
+  --color-accent-200: var(--accent-200);
+  --color-accent-300: var(--accent-300);
+  --color-accent-400: var(--accent-400);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+  --color-accent-800: var(--accent-800);
+  --color-accent-900: var(--accent-900);
+  --color-accent-950: var(--accent-950);
+
+  --color-ink-50: var(--ink-50);
+  --color-ink-100: var(--ink-100);
+  --color-ink-200: var(--ink-200);
+  --color-ink-300: var(--ink-300);
   --color-ink-400: var(--ink-400);
+  --color-ink-500: var(--ink-500);
+  --color-ink-600: var(--ink-600);
+  --color-ink-700: var(--ink-700);
+  --color-ink-800: var(--ink-800);
+  --color-ink-900: var(--ink-900);
+  --color-ink-950: var(--ink-950);
 
   --color-paper-50: var(--paper-50);
   --color-paper-100: var(--paper-100);
   --color-paper-200: var(--paper-200);
+  --color-paper-300: var(--paper-300);
+  --color-paper-400: var(--paper-400);
+  --color-paper-500: var(--paper-500);
+  --color-paper-600: var(--paper-600);
+  --color-paper-700: var(--paper-700);
+  --color-paper-800: var(--paper-800);
+  --color-paper-900: var(--paper-900);
+  --color-paper-950: var(--paper-950);
 
-  --color-alt-a: var(--alt-a);
-  --color-alt-b: var(--alt-b);
-  --color-ok: var(--ok);
-  --color-warn: var(--warn);
-  --color-bad: var(--bad);
-  --color-on-accent: var(--on-accent-token);
+  --color-ok-50: var(--ok-50);
+  --color-ok-100: var(--ok-100);
+  --color-ok-200: var(--ok-200);
+  --color-ok-300: var(--ok-300);
+  --color-ok-400: var(--ok-400);
+  --color-ok-500: var(--ok-500);
+  --color-ok-600: var(--ok-600);
+  --color-ok-700: var(--ok-700);
+  --color-ok-800: var(--ok-800);
+  --color-ok-900: var(--ok-900);
+  --color-ok-950: var(--ok-950);
+
+  --color-warn-50: var(--warn-50);
+  --color-warn-100: var(--warn-100);
+  --color-warn-200: var(--warn-200);
+  --color-warn-300: var(--warn-300);
+  --color-warn-400: var(--warn-400);
+  --color-warn-500: var(--warn-500);
+  --color-warn-600: var(--warn-600);
+  --color-warn-700: var(--warn-700);
+  --color-warn-800: var(--warn-800);
+  --color-warn-900: var(--warn-900);
+  --color-warn-950: var(--warn-950);
+
+  --color-bad-50: var(--bad-50);
+  --color-bad-100: var(--bad-100);
+  --color-bad-200: var(--bad-200);
+  --color-bad-300: var(--bad-300);
+  --color-bad-400: var(--bad-400);
+  --color-bad-500: var(--bad-500);
+  --color-bad-600: var(--bad-600);
+  --color-bad-700: var(--bad-700);
+  --color-bad-800: var(--bad-800);
+  --color-bad-900: var(--bad-900);
+  --color-bad-950: var(--bad-950);
+
+  --color-accent-fill: var(--accent-fill);
+  --color-on-accent: var(--on-accent);
 
   --font-display: var(--font-display);
   --font-sans: var(--font-body);
@@ -45,72 +107,75 @@
 /*
  * Roles.
  *
- * Components name these and never the ramp above, so "what is the page
- * background" has one answer that both themes agree on. A component that
- * reaches past this layer for `paper-50` directly is a component that breaks
- * in dark mode.
+ * There are three weights of text and all three clear 4.5:1. "Faint" means
+ * lower emphasis, not lower legibility — there is no exemption in WCAG for
+ * text the designer considered unimportant, and the reader deciding what
+ * matters is rather the point. Emphasis comes from size and weight instead.
+ *
+ * Components name these and never the ramps above, so "what is the page
+ * background" has one answer both themes agree on. A component that reaches
+ * past this layer for `paper-50` directly is one that breaks in dark mode.
+ *
+ * `--accent-fill` and `--on-accent` are absent here on purpose: which step
+ * carries a filled brand block, and what text survives on top of it, is a fact
+ * about the brand rather than about the theme. A pale gold takes near-black;
+ * a deep red takes paper. Both arrive already resolved from the config.
  */
 :root {
-  --ground: var(--paper-50);
-  --surface: var(--paper-100);
+  --ground: var(--paper-100);
+  --surface: var(--paper-50);
   --sunken: var(--paper-200);
-  --line: var(--paper-200);
+  --line: var(--paper-300);
   --line-strong: var(--ink-400);
-  --fg: var(--ink-900);
-  --fg-muted: var(--ink-500);
-  --fg-faint: var(--ink-400);
-  --accent: var(--brand-600);
-  --accent-rule: var(--brand-500);
-  --accent-fill: var(--brand-400);
-  --on-accent: var(--on-accent-token);
-  --state-ok: var(--ok);
-  --state-warn: var(--warn);
-  --state-bad: var(--bad);
+  --fg: var(--ink-950);
+  --fg-muted: var(--ink-800);
+  --fg-faint: var(--ink-700);
+  --accent: var(--brand-700);
+  --accent-rule: var(--brand-600);
+  --state-ok: var(--ok-700);
+  --state-warn: var(--warn-700);
+  --state-bad: var(--bad-700);
   color-scheme: light;
 }
 
 /*
- * Three states, not two: an explicit choice stamps the root, and the default
- * "system" stamps nothing — so the media query has to carry the un-stamped
- * case while still losing to an explicit light choice.
+ * Three states, not two. An explicit choice stamps the root; the default
+ * "system" stamps nothing — so the media query carries the un-stamped case
+ * while still losing to an explicit light choice.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ground: var(--ink-900);
-    --surface: var(--ink-800);
-    --sunken: var(--ink-700);
-    --line: var(--ink-700);
-    --line-strong: var(--ink-500);
-    --fg: var(--paper-100);
-    --fg-muted: var(--paper-200);
-    --fg-faint: var(--ink-400);
-    --accent: var(--brand-400);
-    --accent-rule: var(--brand-400);
-    --accent-fill: var(--brand-400);
-    --on-accent: var(--on-accent-token);
-    --state-ok: var(--ok-lift);
-    --state-warn: var(--warn-lift);
-    --state-bad: var(--bad-lift);
-    color-scheme: dark;
+  --ground: var(--ink-950);
+  --surface: var(--ink-900);
+  --sunken: var(--ink-800);
+  --line: var(--ink-800);
+  --line-strong: var(--ink-600);
+  --fg: var(--paper-100);
+  --fg-muted: var(--paper-300);
+  --fg-faint: var(--ink-300);
+  --accent: var(--brand-400);
+  --accent-rule: var(--brand-500);
+  --state-ok: var(--ok-400);
+  --state-warn: var(--warn-400);
+  --state-bad: var(--bad-400);
+  color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --ground: var(--ink-900);
-  --surface: var(--ink-800);
-  --sunken: var(--ink-700);
-  --line: var(--ink-700);
-  --line-strong: var(--ink-500);
+  --ground: var(--ink-950);
+  --surface: var(--ink-900);
+  --sunken: var(--ink-800);
+  --line: var(--ink-800);
+  --line-strong: var(--ink-600);
   --fg: var(--paper-100);
-  --fg-muted: var(--paper-200);
-  --fg-faint: var(--ink-400);
+  --fg-muted: var(--paper-300);
+  --fg-faint: var(--ink-300);
   --accent: var(--brand-400);
-  --accent-rule: var(--brand-400);
-  --accent-fill: var(--brand-400);
-  --on-accent: var(--on-accent-token);
-  --state-ok: var(--ok-lift);
-  --state-warn: var(--warn-lift);
-  --state-bad: var(--bad-lift);
+  --accent-rule: var(--brand-500);
+  --state-ok: var(--ok-400);
+  --state-warn: var(--warn-400);
+  --state-bad: var(--bad-400);
   color-scheme: dark;
 }
 

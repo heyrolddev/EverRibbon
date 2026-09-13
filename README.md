@@ -58,17 +58,25 @@ that breaks in dark mode.
 
 ## Adding a shop
 
-1. Copy `config/brands/example.ts` to `config/brands/<key>.ts`.
-2. Register it in `config/index.ts`.
-3. Set `NEXT_PUBLIC_BRAND=<key>`.
-4. `npm test`.
+1. Grow a ramp from each of the shop's colours:
+   `node scripts/palette.mjs "#C9A227" brand`
+2. Copy `config/brands/pepperpan.ts` to `config/brands/<key>.ts` and paste them in.
+3. Register it in `config/index.ts`.
+4. Set `NEXT_PUBLIC_BRAND=<key>`.
+5. `npm test`.
 
-Step 4 is not a formality. `tests/palette.test.ts` fails a palette whose text
+Step 5 is not a formality. `tests/palette.test.ts` fails a palette whose text
 cannot be read — 4.5:1 for text, 3:1 for borders, in **both** themes — and
-fails one whose warning colour is too close to the brand to read as a warning.
-Handing a colour picker to a shop owner without that check means the first
-buyer who loves pale gold ships prices nobody can read in daylight, and neither
-of you finds out until a customer gives up on the order form.
+fails one whose warning colour is too close to the brand to read as a warning,
+one whose ramp doubles back on itself, and one where a `600` of one hue weighs
+visibly more than a `600` of the next. Handing a colour picker to a shop owner
+without those checks means the first buyer who loves pale gold ships prices
+nobody can read in daylight, and neither of you finds out until a customer
+gives up on the order form.
+
+Two shops are configured today — the ribbon shop this runs, and the food stall
+it was extracted from. They share no colour, font, currency behaviour or
+fulfillment model, and they run from one build.
 
 ## Layout
 
@@ -76,6 +84,8 @@ of you finds out until a customer gives up on the order form.
 config/          what a shop is. The only place a brand fact may live.
   schema.ts        the type, and validation that runs at import
   brands/          one file per shop
+scripts/
+  palette.mjs      grows an 11-step ramp from one colour, in OKLCH
 src/
   app/             routes, and globals.css — tokens, no values
   lib/format.ts    money, dates, durations, in the shop's own terms

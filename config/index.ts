@@ -1,6 +1,6 @@
 import { validateBrand, PALETTE_KEYS, type BrandConfig } from "./schema.ts";
 import { everribbon } from "./brands/everribbon.ts";
-import { example } from "./brands/example.ts";
+import { pepperpan } from "./brands/pepperpan.ts";
 
 /**
  * Every shop this build knows how to be.
@@ -10,7 +10,7 @@ import { example } from "./brands/example.ts";
  * wrong brand on every cold load, which is exactly the thing a shop owner
  * notices and cannot explain.
  */
-export const BRANDS: Record<string, BrandConfig> = { everribbon, example };
+export const BRANDS: Record<string, BrandConfig> = { everribbon, pepperpan };
 
 /** Used when NEXT_PUBLIC_BRAND is unset — a dev machine, or a one-shop deploy. */
 const DEFAULT_BRAND = "everribbon";
@@ -40,14 +40,15 @@ export const brand = resolveBrand();
  * without a deploy.
  */
 export function brandVars(b: BrandConfig = brand): string {
-  const lines = PALETTE_KEYS.map(
-    (k) => `--${k === "on-accent" ? "on-accent-token" : k}:${b.palette[k]}`
-  );
+  const lines: string[] = PALETTE_KEYS.map((k) => `--${k}:${b.palette[k]}`);
+  // The two the stylesheet cannot decide for itself. See Roles in schema.ts.
+  lines.push(`--accent-fill:${b.palette[b.roles.accentFill]}`);
+  lines.push(`--on-accent:${b.palette[b.roles.onAccent]}`);
   lines.push(`--font-display:${b.fonts.display}`);
   lines.push(`--font-body:${b.fonts.body}`);
   lines.push(`--font-mono-stack:${b.fonts.mono}`);
   return `:root{${lines.join(";")}}`;
 }
 
-export type { BrandConfig, Palette } from "./schema.ts";
-export { validateBrand, PALETTE_KEYS, BrandConfigError } from "./schema.ts";
+export type { BrandConfig, Palette, PaletteKey, Ramp, Step, Roles } from "./schema.ts";
+export { validateBrand, PALETTE_KEYS, RAMPS, STEPS, BrandConfigError } from "./schema.ts";

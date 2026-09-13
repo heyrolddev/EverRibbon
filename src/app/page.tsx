@@ -1,4 +1,4 @@
-import { brand } from "../../config/index.ts";
+import { brand, RAMPS, STEPS } from "../../config/index.ts";
 import { money, formatDate, duration, shopToday } from "../lib/format.ts";
 
 /*
@@ -17,6 +17,7 @@ export default function Home() {
     ["Money", money(1234.5) + " · " + money(-1.25)],
     ["Duration", duration(185)],
     ["Fulfillment", brand.fulfillment],
+    ["Accent block", `${brand.roles.accentFill} under ${brand.roles.onAccent}`],
     [
       "Deposit",
       brand.fulfillment === "made_to_order"
@@ -46,14 +47,13 @@ export default function Home() {
         ))}
       </dl>
 
-      <div className="flex gap-1.5">
-        {(["brand-400", "brand-600", "ink-900", "paper-200", "alt-a", "alt-b", "ok", "warn", "bad"] as const).map((k) => (
-          <div
-            key={k}
-            title={k}
-            className="h-10 flex-1 border border-[var(--line-strong)]"
-            style={{ background: `var(--${k})` }}
-          />
+      <div className="flex gap-1.5" aria-hidden>
+        {RAMPS.map((name) => (
+          <div key={name} className="flex flex-1 flex-col gap-px" title={name}>
+            {STEPS.map((step) => (
+              <div key={step} className="h-3" style={{ background: `var(--${name}-${step})` }} />
+            ))}
+          </div>
         ))}
       </div>
 

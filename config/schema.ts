@@ -11,38 +11,46 @@
  * all of which began as one reasonable exception.
  */
 
-/** Colour roles, as raw values. Named by job, never by hue. */
-export type Palette = {
-  /** The brand ramp. 400 is the fill; 500 rules a border; 600 carries text. */
-  "brand-200": string; "brand-300": string; "brand-400": string;
-  "brand-500": string; "brand-600": string; "brand-700": string;
-  /** Ink: text and dark grounds. Warm or cool, never pure black. */
-  "ink-900": string; "ink-800": string; "ink-700": string;
-  "ink-500": string; "ink-400": string;
-  /** Paper: light grounds. */
-  "paper-50": string; "paper-100": string; "paper-200": string;
-  /**
-   * Two supporting hues, and the semantic three. Each has a `-lift` variant
-   * for dark mode: a colour legible on paper is rarely legible on ink, and
-   * inverting the palette rather than re-picking these is how dark mode ends
-   * up with unreadable warnings.
-   */
-  "alt-a": string; "alt-a-lift": string;
-  "alt-b": string; "alt-b-lift": string;
-  /** Whichever of ink or paper is legible ON brand-400. Not every brand gets ink. */
-  "on-accent": string;
-  "ok": string; "ok-lift": string;
-  "warn": string; "warn-lift": string;
-  "bad": string; "bad-lift": string;
-};
+/**
+ * The seven ramps every shop has, and the eleven steps each one carries.
+ *
+ * Naming is by job, never by hue: a shop whose brand is gold and a shop whose
+ * brand is red both write `brand-600`, so a component can be written once. The
+ * five identity ramps map exactly onto the five areas of the back office —
+ * the day's work, the workshop, the numbers, settings, and the data — which is
+ * why there are five and not an arbitrary number.
+ *
+ * Eleven steps is more than any one screen uses. They are config values and
+ * cost nothing, and the alternative is a shop needing a code change to get a
+ * hover state.
+ */
+export const RAMPS = ["brand", "accent", "ink", "paper", "ok", "warn", "bad"] as const;
+export const STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
 
-export const PALETTE_KEYS = [
-  "brand-200","brand-300","brand-400","brand-500","brand-600","brand-700",
-  "ink-900","ink-800","ink-700","ink-500","ink-400",
-  "paper-50","paper-100","paper-200",
-  "alt-a","alt-a-lift","alt-b","alt-b-lift","on-accent",
-  "ok","ok-lift","warn","warn-lift","bad","bad-lift",
-] as const satisfies readonly (keyof Palette)[];
+export type Ramp = (typeof RAMPS)[number];
+export type Step = (typeof STEPS)[number];
+export type PaletteKey = `${Ramp}-${Step}`;
+export type Palette = Record<PaletteKey, string>;
+
+export const PALETTE_KEYS: PaletteKey[] = RAMPS.flatMap((r) =>
+  STEPS.map((s) => `${r}-${s}` as PaletteKey)
+);
+
+/**
+ * The two facts about an accent that no shared stylesheet can decide.
+ *
+ * A pale brand wants dark text on it; a deep brand wants light. Gold at its
+ * most characteristic is a 400 and takes near-black; a deep red is a 700 and
+ * takes paper. Guessing either in CSS produces a button nobody can read, so
+ * the brand states both and `tests/palette.test.ts` checks the pair clears
+ * 4.5:1.
+ */
+export type Roles = {
+  /** The step used for a filled brand block — a primary button, a chip. */
+  accentFill: PaletteKey;
+  /** What is legible on top of it. */
+  onAccent: PaletteKey;
+};
 
 export type BrandConfig = {
   /** Stable id. Used by NEXT_PUBLIC_BRAND and as the asset folder name. */
@@ -88,6 +96,7 @@ export type BrandConfig = {
   };
 
   palette: Palette;
+  roles: Roles;
   fonts: {
     /** The shop's voice. Headings only. */
     display: string;
@@ -135,6 +144,12 @@ export function validateBrand(b: BrandConfig): BrandConfig {
     const v = b.palette?.[k];
     if (!v) fail(`palette.${k} is missing`);
     if (!HEX.test(v)) fail(`palette.${k} must be a 6-digit hex, got "${v}"`);
+  }
+
+  for (const k of ["accentFill", "onAccent"] as const) {
+    const v = b.roles?.[k];
+    if (!v) fail(`roles.${k} is required`);
+    if (!PALETTE_KEYS.includes(v)) fail(`roles.${k} is "${v}", which is not a palette key`);
   }
 
   for (const k of ["display","body","mono"] as const)
