@@ -38,8 +38,15 @@ export function port(source, relPath) {
     return mapped;
   });
 
-  // 2. Local money formatters. Six copies of this existed; there is now one.
-  out = out.replace(/^.*const\s+peso\w*\s*=\s*\(.*\n/gm, "");
+  /*
+   * 2. Local money formatters. Six copies of this existed; there is now one.
+   *
+   * The declaration has to be removed whole, up to its terminating semicolon.
+   * Deleting only the first line leaves the body behind, and rule 3 below then
+   * rewrites that orphan into something that does not parse — which is at
+   * least a loud failure, but it cost two files before the pattern was clear.
+   */
+  out = out.replace(/^[ \t]*const\s+peso\w*\s*=[\s\S]*?;[ \t]*\n/gm, "");
   out = out.replace(/\bpesoRound\(/g, "moneyRound(");
   out = out.replace(/\bpeso\(/g, "money(");
 
@@ -101,7 +108,20 @@ export function port(source, relPath) {
   if (/\bbrand\./.test(out) && !/import[^;]*\bbrand\b[^;]*from/.test(out)) {
     header.push(`import { brand } from "${rel("config/index.ts")}";`);
   }
-  if (header.length) out = header.join("\n") + "\n" + out;
+  /*
+   * Imports go AFTER any leading directive, never above it.
+   *
+   * `"use client"` only counts as a directive while it is the first statement
+   * in the file. Prepend an import above it and it becomes a stray expression:
+   * the component silently turns into a server component, which fails at
+   * runtime on the first hook rather than at build time. Lint sees it as an
+   * unused expression, which is a very quiet way to describe a broken page.
+   */
+  if (header.length) {
+    const directive = /^\s*(?:\/\*[\s\S]*?\*\/\s*)*(["'])use (?:client|server)\1\s*;?[ \t]*\r?\n/.exec(out);
+    const at = directive ? directive[0].length : 0;
+    out = out.slice(0, at) + header.join("\n") + "\n" + out.slice(at);
+  }
 
   return { out, notes };
 }

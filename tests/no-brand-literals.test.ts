@@ -146,3 +146,24 @@ test("documentation is allowed to name a format, code is not", () => {
   assert.equal(check(`const s = "${symbol}" + n;`), true, "code may not");
   assert.equal(check(`const x = 1; // a shop called EverRibbon`), true, "a shop name is banned in prose as well");
 });
+
+test('"use client" is still the first statement wherever it appears', () => {
+  /*
+   * A directive only counts while nothing precedes it. An import placed above
+   * `"use client"` turns it into a stray expression and the component quietly
+   * becomes a server one — which fails at runtime on the first hook, not at
+   * build time. The porting script put imports there for three files before
+   * this was noticed, and there are dozens more still to carry over.
+   */
+  const offenders: string[] = [];
+  for (const file of files) {
+    const src = readFileSync(file, "utf8");
+    const idx = src.indexOf('"use client"');
+    if (idx === -1) continue;
+    const before = src.slice(0, idx);
+    // Comments and whitespace may precede it; statements may not.
+    const stripped = before.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "").trim();
+    if (stripped) offenders.push(`${relative(ROOT, file)} — "${stripped.split("\n")[0]?.slice(0, 60)}" comes first`);
+  }
+  assert.deepEqual(offenders, [], `"use client" must lead the file:\n${offenders.join("\n")}`);
+});
