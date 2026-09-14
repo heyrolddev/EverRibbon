@@ -15,10 +15,12 @@ npm run dev
 ```
 
 ```bash
-npm test          # node's own runner, no framework, no transpile step
+npm test           # node's own runner, no framework, no transpile step
 npm run typecheck
 npm run lint
-npm run check     # all three, which is what CI runs
+npm run check      # all three
+
+DATABASE_URL=postgres://... npm run check:schema   # loads the baseline for real
 ```
 
 ## Porting the rest
@@ -30,6 +32,30 @@ names what it left and the file fails `npm test` until a person has looked.
 
 That refusal is the point. A codemod that silently half-converts is worse than
 none, because the diff looks finished.
+
+## The schema
+
+`supabase/migrations/` is a baseline, not a history. This is a new database,
+so the schema is the state it should be in rather than a replay of forty-one
+changes that never happened here.
+
+It was produced rather than written: the original system's migrations were
+loaded into Postgres, the food vocabulary renamed **in the database** so
+Postgres itself rewrote the foreign keys, indexes and policies, and the result
+dumped and loaded back into an empty database to prove it applies.
+
+A shop sells **products**, made from **materials**, through a bill of
+materials. A product can be built from other products, which is what lets a
+bouquet be twelve flowers rather than a flat list of ribbon.
+
+`npm run check:schema` loads the whole thing into a throwaway Postgres and
+asserts what must hold — every table has row-level security, every secured
+table has a policy, the access helpers exist, and nothing is named after one
+trade. CI runs it against a real Postgres on every push, because a migration
+that does not run is not a migration.
+
+From here the ordinary rule applies: **never edit a migration that has run.**
+Add a new one.
 
 ## Deployment storage
 

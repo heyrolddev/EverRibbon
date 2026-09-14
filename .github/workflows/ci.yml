@@ -16,8 +16,8 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Tests
-        # Runs on bare Node's own test runner — no framework, no transpile
-        # step, and therefore nothing between a failing assertion and the log.
+        # Bare Node's own runner — no framework, no transpile step, and so
+        # nothing between a failing assertion and the log.
         run: npm test
       - name: Types
         run: npm run typecheck
@@ -25,3 +25,30 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
+
+  schema:
+    # A migration that does not run is not a migration. This loads the whole
+    # baseline into a real Postgres on every push, so a schema that cannot be
+    # applied is a red build rather than a bad evening during a deploy.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Load the baseline and check what must hold
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node scripts/check-schema.mjs
