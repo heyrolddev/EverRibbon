@@ -20,6 +20,10 @@ jobs:
         # nothing between a failing assertion and the log.
         run: npm test
       - name: Types
+        # `npm run typecheck` runs `next typegen` first on purpose. LayoutProps
+        # and PageProps are globals Next writes into .next/types, so a bare tsc
+        # on a fresh checkout fails on every typed route — which passed locally
+        # only because a build had already happened.
         run: npm run typecheck
       - name: Lint
         run: npm run lint

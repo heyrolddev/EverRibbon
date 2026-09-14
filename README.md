@@ -16,7 +16,7 @@ npm run dev
 
 ```bash
 npm test           # node's own runner, no framework, no transpile step
-npm run typecheck
+npm run typecheck   # runs `next typegen` first; typed routes need it
 npm run lint
 npm run check      # all three
 
