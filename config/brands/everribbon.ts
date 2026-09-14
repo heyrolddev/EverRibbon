@@ -33,13 +33,6 @@ export const everribbon: BrandConfig = {
   currency: { code: "PHP", symbol: "₱", ascii: "P", decimals: 2 },
 
   fulfillment: "made_to_order",
-  deposit: {
-    percent: 25,
-    // The shop starts cutting within twenty minutes of a deal, so the deposit
-    // is non-refundable from that point rather than from a countdown to the
-    // due date. This is the window in which either side can still walk away.
-    coolingOffMinutes: 20,
-  },
 
   contact: {
     street: "Apalit",

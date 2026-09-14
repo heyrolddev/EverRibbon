@@ -18,12 +18,6 @@ export default function Home() {
     ["Duration", duration(185)],
     ["Fulfillment", brand.fulfillment],
     ["Accent block", `${brand.roles.accentFill} under ${brand.roles.onAccent}`],
-    [
-      "Deposit",
-      brand.fulfillment === "made_to_order"
-        ? `${brand.deposit.percent}% · ${duration(brand.deposit.coolingOffMinutes)} to change your mind`
-        : "none",
-    ],
   ];
 
   return (

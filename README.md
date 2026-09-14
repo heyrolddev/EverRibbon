@@ -57,6 +57,28 @@ that does not run is not a migration.
 From here the ordinary rule applies: **never edit a migration that has run.**
 Add a new one.
 
+### Applying it to a Supabase project
+
+The dashboard's SQL editor, in filename order, one file at a time. Or with the
+CLI, `supabase db push`. A made-to-order shop then runs
+`supabase/seeds/made-to-order-statuses.sql`, which replaces the counter flow
+with one that has an agreement, a deposit and a proof.
+
+## Config, or settings?
+
+Two kinds of setting look alike and are not:
+
+| | Lives in | Changed by |
+|---|---|---|
+| What the shop **is** — name, palette, fonts, locale, timezone, currency, fulfillment mode | `config/brands/<shop>.ts` | a deploy |
+| How the shop **works today** — deposit, capacity, labour rate, consumables, the steps an order goes through | the database | the owner, on a Tuesday |
+
+Putting the second kind in the first is the mistake `src/lib/operating.ts`
+exists to prevent, and one had already been made: the deposit percentage sat
+in the brand config while the real one had always lived in `payment_settings`,
+so the two could disagree and only one was reachable from the admin.
+`tests/config.test.ts` now fails if an operating number reappears in config.
+
 ## Deployment storage
 
 Every push builds a deployment and nothing removes the old ones, so a few

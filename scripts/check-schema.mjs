@@ -57,6 +57,24 @@ const checks = [
    "and (table_name like '%meal%' or table_name like '%ingredient%' or table_name like '%batch%' or table_name like '%menu%')", "0",
    "A table named after one trade is a table the next buyer has to explain away."],
 
+  ["the singleton settings rows exist",
+   "select count(*) from (select 1 from settings union all select 1 from shop_settings " +
+   "union all select 1 from payment_settings union all select 1 from delivery_settings " +
+   "union all select 1 from chat_settings) t", "5",
+   "The code reads these with .single(); a missing row is an error on screen, not an empty form."],
+
+  ["every weekday has an hours row",
+   "select count(*) from shop_hours", "7",
+   "Without them the hours editor has nothing to edit and the shop reads as closed."],
+
+  ["the order statuses are rows, not a constant",
+   "select count(*) from order_statuses", "7",
+   "An empty list means no order can be given any status at all."],
+
+  ["orders.status is a foreign key, not a CHECK",
+   "select count(*) from pg_constraint where conname = 'orders_status_fkey' and contype = 'f'", "1",
+   "A CHECK means adding a step needs a migration and a deploy."],
+
   ["no column is food-shaped either",
    "select count(*) from information_schema.columns where table_schema='public' " +
    "and (column_name like '%meal%' or column_name like '%ingredient%' or column_name like '%dish%')", "0",

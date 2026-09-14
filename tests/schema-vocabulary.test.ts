@@ -21,15 +21,51 @@ test("the baseline is not empty", () => {
   assert.ok(files.length >= 5, `expected the baseline files, found ${files.length}`);
 });
 
+/**
+ * Strip SQL comments, tracking block comments across lines.
+ *
+ * The contract is the SQL; the prose beside it is documentation and may use
+ * ordinary English. A comment explaining that components are made ahead of
+ * demand is not a table called batches.
+ */
+function sqlCode(source: string): string[] {
+  let inBlock = false;
+  return source.split("\n").map((line) => {
+    let out = "", i = 0;
+    while (i < line.length) {
+      if (inBlock) {
+        const end = line.indexOf("*/", i);
+        if (end === -1) return out;
+        inBlock = false; i = end + 2; continue;
+      }
+      const block = line.indexOf("/*", i);
+      const dash = line.indexOf("--", i);
+      if (dash !== -1 && (block === -1 || dash < block)) return out + line.slice(i, dash);
+      if (block !== -1) { out += line.slice(i, block); inBlock = true; i = block + 2; continue; }
+      return out + line.slice(i);
+    }
+    return out;
+  });
+}
+
 test("no migration names a food business", () => {
   const hits: string[] = [];
   for (const f of files) {
-    readFileSync(join(DIR, f), "utf8").split("\n").forEach((line, i) => {
-      const m = FOOD.exec(line);
+    const src = readFileSync(join(DIR, f), "utf8");
+    const code = sqlCode(src);
+    src.split("\n").forEach((line, i) => {
+      const m = FOOD.exec(code[i] ?? "");
       if (m) hits.push(`${f}:${i + 1} — "${m[0]}"\n    ${line.trim().slice(0, 90)}`);
     });
   }
   assert.deepEqual(hits, [], `the schema still speaks of food:\n${hits.join("\n")}`);
+});
+
+test("the guard reads SQL, not the prose beside it", () => {
+  // A guard that fires on documentation gets switched off.
+  const code = sqlCode("-- components are made in batches\ncreate table runs ();");
+  assert.equal(code[0]!.trim(), "", "a comment contributes no code");
+  assert.match(code[1]!, /create table runs/);
 });
 
 test("the five tables the costing model rests on are present", () => {

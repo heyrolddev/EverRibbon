@@ -28,7 +28,6 @@ export const pepperpan: BrandConfig = {
 
   // A stall hands the food over now. No deposit, no proof, no capacity calendar.
   fulfillment: "immediate",
-  deposit: { percent: 0, coolingOffMinutes: 0 },
 
   contact: {
     street: "In front of Palengkeni (New Apalit Public Market), beside Osave!",

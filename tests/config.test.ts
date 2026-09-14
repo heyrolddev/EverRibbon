@@ -29,7 +29,6 @@ test("validation rejects the mistakes a new shop actually makes", () => {
   assert.throws(broken({ fulfillment: "sometimes" }), BrandConfigError);
   assert.throws(broken({ palette: { ...ok.palette, "brand-400": "C9A227" } }), BrandConfigError);
   assert.throws(broken({ roles: { accentFill: "brand-9000", onAccent: "ink-950" } }), BrandConfigError);
-  assert.throws(broken({ deposit: { percent: 250, coolingOffMinutes: 20 } }), BrandConfigError);
 });
 
 test("brandVars emits every palette key as a custom property", () => {
@@ -47,4 +46,28 @@ test("brandVars emits every palette key as a custom property", () => {
 test("two brands produce different CSS from the same code path", () => {
   // The whole thesis, as one assertion.
   assert.notEqual(brandVars(ever), brandVars(other));
+});
+
+test("the config carries what a shop IS, not how it works today", () => {
+  /*
+   * The line this asserts: a value the owner changes on a Tuesday does not
+   * belong in a file that needs a deploy. The deposit percentage had been in
+   * both places at once — here, and in payment_settings where the admin screen
+   * actually reads it — so the two could disagree and only one was reachable.
+   */
+  for (const [key, b] of Object.entries(BRANDS)) {
+    const loose = b as unknown as Record<string, unknown>;
+    for (const runtime of ["deposit", "capacity", "labourRate", "consumables", "rush"]) {
+      assert.equal(loose[runtime], undefined,
+        `${key}: "${runtime}" is something an owner edits — it belongs in the database, see src/lib/operating.ts`);
+    }
+  }
+});
+
+test("fulfillment is a mode, and the only operating fact config holds", () => {
+  // The mode is structural: it decides which screens exist at all, so it is
+  // a deploy either way. The numbers inside those screens are not.
+  for (const [key, b] of Object.entries(BRANDS)) {
+    assert.ok(["immediate", "made_to_order"].includes(b.fulfillment), `${key}: ${b.fulfillment}`);
+  }
 });

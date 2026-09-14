@@ -87,22 +87,14 @@ export type BrandConfig = {
    * deposit, the proof gate and the capacity calendar, because a shop that
    * builds before it hands over needs all three and a shop that does not is
    * only confused by them.
+   *
+   * Only the mode lives here. What the deposit IS, how long it stays
+   * refundable and how many minutes a day holds are all things an owner
+   * changes without a deploy, so they live in the database -- see
+   * src/lib/operating.ts.
    */
   fulfillment: "immediate" | "made_to_order";
 
-  /** Only read when fulfillment is `made_to_order`. */
-  deposit: {
-    percent: number;
-    /**
-     * Minutes between a deal being agreed and work starting, during which a
-     * cancellation is still free.
-     *
-     * This exists because "non-refundable once production starts" is only fair
-     * if the customer had a moment to change their mind — and because the shop
-     * needs the same moment to notice a mistake before cutting stock.
-     */
-    coolingOffMinutes: number;
-  };
 
   /**
    * Where the shop physically is, and where it posts.
@@ -177,13 +169,6 @@ export function validateBrand(b: BrandConfig): BrandConfig {
   if (b.fulfillment !== "immediate" && b.fulfillment !== "made_to_order")
     fail("fulfillment must be 'immediate' or 'made_to_order'");
 
-  if (b.fulfillment === "made_to_order") {
-    const d = b.deposit;
-    if (!d || typeof d.percent !== "number" || d.percent < 0 || d.percent > 100)
-      fail("deposit.percent must be 0-100 for a made_to_order shop");
-    if (!Number.isFinite(d.coolingOffMinutes) || d.coolingOffMinutes < 0)
-      fail("deposit.coolingOffMinutes must be zero or more");
-  }
 
   for (const k of PALETTE_KEYS) {
     const v = b.palette?.[k];
