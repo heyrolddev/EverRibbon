@@ -19,7 +19,7 @@ const backup = (extra: object = {}) =>
     app: "PepperPan",
     version: 1,
     exportedAt: "2026-09-04T02:00:00.000Z",
-    data: { meals: [{ id: "m1" }] },
+    data: { products: [{ id: "m1" }] },
     ...extra,
   });
 
@@ -53,21 +53,21 @@ test("parents come back before their children", () => {
   // Read out of the migrations rather than remembered. An earlier version of
   // this test asserted orders -> order_packaging, which sounds obviously true
   // and is not: that table's `ref_id` is a polymorphic text column pointing at
-  // inventory and batches, and the name is what misleads. A list of real
+  // inventory and production_runs, and the name is what misleads. A list of real
   // constraints is the only kind worth asserting.
   const pairs: [string, string][] = [
-    ["batches", "batch_ingredients"],
+    ["production_runs", "production_run_materials"],
     ["chat_threads", "chat_messages"],
-    ["ingredients", "batch_ingredients"],
-    ["ingredients", "consumption_log"],
-    ["ingredients", "ingredient_lots"],
-    ["ingredients", "purchase_log"],
-    ["ingredients", "waste_log"],
-    ["meals", "meal_components"],
-    ["meals", "meal_ingredients"],
-    ["meals", "meal_packaging"],
-    ["meals", "order_lines"],
-    ["meals", "reviews"],
+    ["materials", "production_run_materials"],
+    ["materials", "material_usage"],
+    ["materials", "material_lots"],
+    ["materials", "purchases"],
+    ["materials", "waste"],
+    ["products", "product_components"],
+    ["products", "product_materials"],
+    ["products", "product_packaging"],
+    ["products", "order_lines"],
+    ["products", "reviews"],
     ["orders", "order_lines"],
     ["orders", "reviews"],
   ];
@@ -87,7 +87,7 @@ test("no table is listed twice", () => {
 });
 
 test("a table this build doesn't know is reported, not silently dropped", () => {
-  const r = readBackup(backup({ data: { meals: [], something_new: [] } }));
+  const r = readBackup(backup({ data: { products: [], something_new: [] } }));
   assert.ok(!("error" in r));
   assert.deepEqual(unknownTables(r), ["something_new"]);
 });

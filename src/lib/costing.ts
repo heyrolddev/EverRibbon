@@ -1,16 +1,16 @@
 import { money } from "./format.ts";
 /**
- * What a dish actually costs to make.
+ * What a product actually costs to make.
  *
  * Fourteen tables have been sitting in this database since the first
- * migration — ingredients, batches, recipes, waste — and until now not one
+ * migration — materials, production_runs, recipes, waste — and until now not one
  * line of the app read them. So the shop knew exactly what came in and nothing
  * at all about what went out, which means the number everyone actually cares
  * about, "did I make money on that", has never once been on screen.
  *
  * The arithmetic is small. Getting it *honest* is the work, and that's what
- * most of this file is about: a dish with no recipe entered must never render
- * as "₱0 cost, 100% margin", and a recipe pointing at an ingredient that was
+ * most of this file is about: a product with no recipe entered must never render
+ * as "₱0 cost, 100% margin", and a recipe pointing at a material that was
  * deleted must not quietly cost ₱0. Both look like fantastic news. Both are
  * the software failing silently, which is the failure mode this project keeps
  * having to design against.
@@ -19,7 +19,7 @@ import { money } from "./format.ts";
  * on the server, in a CSV, and in the browser.
  */
 
-export type Ingredient = {
+export type Material = {
   id: string;
   name: string;
   unit: string;
@@ -32,24 +32,24 @@ export type Ingredient = {
   categories: string[] | null;
 };
 
-export type Batch = {
+export type ProductionRun = {
   id: string;
   name: string;
   yield_qty: number;
   yield_unit: string;
-  batch_stock: number;
+  run_stock: number;
   reorder_level: number;
   /** Set for repacks that have no recipe — a bought item split into portions. */
   manual_cost_per_unit: number | null;
 };
 
 export type BatchIngredient = {
-  batch_id: string;
-  ingredient_id: string;
+  production_run_id: string;
+  material_id: string;
   qty: number;
 };
 
-export type Meal = {
+export type Product = {
   id: string;
   name: string;
   price: number;
@@ -61,14 +61,14 @@ export type Meal = {
 };
 
 export type MealIngredient = {
-  meal_id: string;
-  ref_type: string; // "inv" | "batch"
+  product_id: string;
+  ref_type: string; // "inv" | "production_run"
   ref_id: string;
   qty: number;
 };
 
 export type MealComponent = {
-  meal_id: string;
+  product_id: string;
   component_meal_id: string;
   qty: number;
 };
@@ -76,7 +76,7 @@ export type MealComponent = {
 /** One line of a recipe, priced. */
 export type CostLine = {
   label: string;
-  kind: "ingredient" | "batch" | "meal";
+  kind: "material" | "production_run" | "product";
   qty: number;
   unit: string;
   /** ₱ per unit of whatever `unit` is. */
@@ -88,24 +88,24 @@ export type CostLine = {
 };
 
 export type BatchCost = {
-  batch: Batch;
-  /** ₱ to make one full batch. */
+  production_run: ProductionRun;
+  /** ₱ to make one full production_run. */
   total: number;
   /** ₱ per unit of yield — this is what a recipe multiplies by. */
   perUnit: number;
   lines: CostLine[];
-  /** True when nothing reliable can be said about this batch's cost. */
+  /** True when nothing reliable can be said about this production_run's cost. */
   unknown: boolean;
   problems: string[];
 };
 
 export type MealCost = {
-  meal: Meal;
-  /** ₱ of ingredients in one serving. Only meaningful when `costed` is true. */
+  product: Product;
+  /** ₱ of materials in one serving. Only meaningful when `costed` is true. */
   cost: number;
   lines: CostLine[];
   /**
-   * False when the dish has no recipe at all. The difference between "this
+   * False when the product has no recipe at all. The difference between "this
    * costs nothing" and "nobody has told the system what's in it" is the whole
    * point — one is a triumph, the other is a blank.
    */
@@ -120,36 +120,36 @@ function safeDiv(total: number, by: number): number | null {
 }
 
 /**
- * Price every batch.
+ * Price every production_run.
  *
- * Batches only ever contain ingredients, never other batches, so there's no
+ * ProductionRuns only ever contain materials, never other production_runs, so there's no
  * recursion to worry about here — a single pass is enough.
  */
 export function costBatches(
-  batches: Batch[],
-  batchIngredients: BatchIngredient[],
-  ingredients: Ingredient[]
+  production_runs: ProductionRun[],
+  productionRunMaterials: BatchIngredient[],
+  materials: Material[]
 ): Map<string, BatchCost> {
-  const byId = new Map(ingredients.map((i) => [i.id, i]));
+  const byId = new Map(materials.map((i) => [i.id, i]));
   const linesFor = new Map<string, BatchIngredient[]>();
-  for (const bi of batchIngredients) {
-    const list = linesFor.get(bi.batch_id) ?? [];
+  for (const bi of productionRunMaterials) {
+    const list = linesFor.get(bi.production_run_id) ?? [];
     list.push(bi);
-    linesFor.set(bi.batch_id, list);
+    linesFor.set(bi.production_run_id, list);
   }
 
   const out = new Map<string, BatchCost>();
-  for (const batch of batches) {
-    const raw = linesFor.get(batch.id) ?? [];
+  for (const production_run of production_runs) {
+    const raw = linesFor.get(production_run.id) ?? [];
     const problems: string[] = [];
     const lines: CostLine[] = raw.map((bi) => {
-      const ing = byId.get(bi.ingredient_id);
+      const ing = byId.get(bi.material_id);
       if (!ing) {
-        const problem = "Ingredient no longer exists";
-        problems.push(`A line in this batch points at a deleted ingredient.`);
+        const problem = "Material no longer exists";
+        problems.push(`A line in this production_run points at a deleted material.`);
         return {
-          label: "Deleted ingredient",
-          kind: "ingredient" as const,
+          label: "Deleted material",
+          kind: "material" as const,
           qty: Number(bi.qty) || 0,
           unit: "",
           unitCost: 0,
@@ -162,7 +162,7 @@ export function costBatches(
       if (unitCost <= 0) problems.push(`${ing.name} has no purchase price set.`);
       return {
         label: ing.name,
-        kind: "ingredient" as const,
+        kind: "material" as const,
         qty,
         unit: ing.unit,
         unitCost,
@@ -175,12 +175,12 @@ export function costBatches(
 
     // A repack — bought ready-made and split into portions — has no recipe by
     // design, and its cost is typed in directly. Checked first, or a repack
-    // would be reported as an empty batch.
-    const manual = batch.manual_cost_per_unit;
+    // would be reported as an empty production_run.
+    const manual = production_run.manual_cost_per_unit;
     if (manual !== null && manual !== undefined && Number(manual) > 0) {
-      out.set(batch.id, {
-        batch,
-        total: Number(manual) * (Number(batch.yield_qty) || 0),
+      out.set(production_run.id, {
+        production_run,
+        total: Number(manual) * (Number(production_run.yield_qty) || 0),
         perUnit: Number(manual),
         lines,
         unknown: false,
@@ -189,16 +189,16 @@ export function costBatches(
       continue;
     }
 
-    const perUnit = safeDiv(total, Number(batch.yield_qty) || 0);
+    const perUnit = safeDiv(total, Number(production_run.yield_qty) || 0);
     if (perUnit === null) {
       problems.push(
         raw.length === 0
-          ? "No recipe entered for this batch."
+          ? "No recipe entered for this production_run."
           : "Yield is zero, so a per-gram cost can't be worked out."
       );
     }
-    out.set(batch.id, {
-      batch,
+    out.set(production_run.id, {
+      production_run,
       total,
       perUnit: perUnit ?? 0,
       lines,
@@ -210,87 +210,87 @@ export function costBatches(
 }
 
 /**
- * Price every meal, including combos built out of other meals.
+ * Price every product, including combos built out of other products.
  *
  * Combos recurse, and a combo that contains itself — however it got entered —
  * would otherwise hang the page rather than show a wrong number. The `seen`
- * set turns that into a visible problem on the dish instead.
+ * set turns that into a visible problem on the product instead.
  */
 export function costMeals(
-  meals: Meal[],
-  mealIngredients: MealIngredient[],
-  mealComponents: MealComponent[],
-  ingredients: Ingredient[],
+  products: Product[],
+  productMaterials: MealIngredient[],
+  productComponents: MealComponent[],
+  materials: Material[],
   batchCosts: Map<string, BatchCost>
 ): Map<string, MealCost> {
-  const ingById = new Map(ingredients.map((i) => [i.id, i]));
-  const mealById = new Map(meals.map((m) => [m.id, m]));
+  const ingById = new Map(materials.map((i) => [i.id, i]));
+  const mealById = new Map(products.map((m) => [m.id, m]));
 
   const ingLines = new Map<string, MealIngredient[]>();
-  for (const mi of mealIngredients) {
-    const list = ingLines.get(mi.meal_id) ?? [];
+  for (const mi of productMaterials) {
+    const list = ingLines.get(mi.product_id) ?? [];
     list.push(mi);
-    ingLines.set(mi.meal_id, list);
+    ingLines.set(mi.product_id, list);
   }
   const compLines = new Map<string, MealComponent[]>();
-  for (const mc of mealComponents) {
-    const list = compLines.get(mc.meal_id) ?? [];
+  for (const mc of productComponents) {
+    const list = compLines.get(mc.product_id) ?? [];
     list.push(mc);
-    compLines.set(mc.meal_id, list);
+    compLines.set(mc.product_id, list);
   }
 
   const done = new Map<string, MealCost>();
 
-  function build(meal: Meal, seen: Set<string>): MealCost {
-    const cached = done.get(meal.id);
+  function build(product: Product, seen: Set<string>): MealCost {
+    const cached = done.get(product.id);
     if (cached) return cached;
 
     const problems: string[] = [];
     const lines: CostLine[] = [];
 
-    for (const mi of ingLines.get(meal.id) ?? []) {
+    for (const mi of ingLines.get(product.id) ?? []) {
       const qty = Number(mi.qty) || 0;
-      if (mi.ref_type === "batch") {
+      if (mi.ref_type === "production_run") {
         const bc = batchCosts.get(mi.ref_id);
         if (!bc) {
-          problems.push("A line points at a batch that no longer exists.");
+          problems.push("A line points at a production_run that no longer exists.");
           lines.push({
-            label: "Deleted batch",
-            kind: "batch",
+            label: "Deleted production_run",
+            kind: "production_run",
             qty,
             unit: "",
             unitCost: 0,
             cost: 0,
-            problem: "Batch no longer exists",
+            problem: "ProductionRun no longer exists",
           });
           continue;
         }
         if (bc.unknown) {
-          problems.push(`${bc.batch.name} has no cost yet, so it counts as ${money(0)} here.`);
+          problems.push(`${bc.production_run.name} has no cost yet, so it counts as ${money(0)} here.`);
         }
         lines.push({
-          label: bc.batch.name,
-          kind: "batch",
+          label: bc.production_run.name,
+          kind: "production_run",
           qty,
-          unit: bc.batch.yield_unit,
+          unit: bc.production_run.yield_unit,
           unitCost: bc.perUnit,
           cost: qty * bc.perUnit,
-          problem: bc.unknown ? "Batch not costed" : null,
+          problem: bc.unknown ? "ProductionRun not costed" : null,
         });
         continue;
       }
 
       const ing = ingById.get(mi.ref_id);
       if (!ing) {
-        problems.push("A line points at an ingredient that no longer exists.");
+        problems.push("A line points at a material that no longer exists.");
         lines.push({
-          label: "Deleted ingredient",
-          kind: "ingredient",
+          label: "Deleted material",
+          kind: "material",
           qty,
           unit: "",
           unitCost: 0,
           cost: 0,
-          problem: "Ingredient no longer exists",
+          problem: "Material no longer exists",
         });
         continue;
       }
@@ -298,7 +298,7 @@ export function costMeals(
       if (unitCost <= 0) problems.push(`${ing.name} has no purchase price set.`);
       lines.push({
         label: ing.name,
-        kind: "ingredient",
+        kind: "material",
         qty,
         unit: ing.unit,
         unitCost,
@@ -307,29 +307,29 @@ export function costMeals(
       });
     }
 
-    for (const mc of compLines.get(meal.id) ?? []) {
+    for (const mc of compLines.get(product.id) ?? []) {
       const qty = Number(mc.qty) || 0;
       const child = mealById.get(mc.component_meal_id);
       if (!child) {
-        problems.push("A combo line points at a dish that no longer exists.");
+        problems.push("A combo line points at a product that no longer exists.");
         lines.push({
-          label: "Deleted dish",
-          kind: "meal",
+          label: "Deleted product",
+          kind: "product",
           qty,
           unit: "serving",
           unitCost: 0,
           cost: 0,
-          problem: "Dish no longer exists",
+          problem: "Product no longer exists",
         });
         continue;
       }
       if (seen.has(child.id)) {
         // A combo containing itself. Left as a problem rather than followed,
         // because following it never returns.
-        problems.push(`${child.name} contains this dish, so the loop is ignored.`);
+        problems.push(`${child.name} contains this product, so the loop is ignored.`);
         lines.push({
           label: child.name,
-          kind: "meal",
+          kind: "product",
           qty,
           unit: "serving",
           unitCost: 0,
@@ -338,39 +338,39 @@ export function costMeals(
         });
         continue;
       }
-      const childCost = build(child, new Set([...seen, meal.id]));
+      const childCost = build(child, new Set([...seen, product.id]));
       if (!childCost.costed) {
         problems.push(`${child.name} has no recipe, so it counts as ${money(0)} here.`);
       }
       problems.push(...childCost.problems);
       lines.push({
         label: child.name,
-        kind: "meal",
+        kind: "product",
         qty,
         unit: "serving",
         unitCost: childCost.cost,
         cost: qty * childCost.cost,
-        problem: childCost.costed ? null : "Dish not costed",
+        problem: childCost.costed ? null : "Product not costed",
       });
     }
 
     const result: MealCost = {
-      meal,
+      product,
       cost: lines.reduce((sum, l) => sum + l.cost, 0),
       lines,
       costed: lines.length > 0,
-      // Deduped: one ingredient with no price can otherwise be reported once
-      // per dish that uses it, and the list becomes unreadable.
+      // Deduped: one material with no price can otherwise be reported once
+      // per product that uses it, and the list becomes unreadable.
       problems: [...new Set(problems)],
     };
-    // Only cached once built without an active cycle above it, so a dish
+    // Only cached once built without an active cycle above it, so a product
     // reached through a loop isn't memoised with its loop-truncated cost.
-    if (seen.size === 0) done.set(meal.id, result);
+    if (seen.size === 0) done.set(product.id, result);
     return result;
   }
 
   const out = new Map<string, MealCost>();
-  for (const meal of meals) out.set(meal.id, build(meal, new Set()));
+  for (const product of products) out.set(product.id, build(product, new Set()));
   return out;
 }
 
@@ -379,9 +379,9 @@ export function costMeals(
 // ---------------------------------------------------------------------------
 
 export type Margin = {
-  /** ₱ left over on one serving, after ingredients. */
+  /** ₱ left over on one serving, after materials. */
   gross: number;
-  /** Ingredients as a share of the price. The trade calls this food cost. */
+  /** Materials as a share of the price. The trade calls this food cost. */
   foodCostPct: number | null;
   /** gross ÷ price. */
   marginPct: number | null;
@@ -392,10 +392,10 @@ export type Margin = {
 /**
  * Where the thresholds come from.
  *
- * Street food generally aims for food cost around 30%: a third to ingredients,
+ * Street food generally aims for food cost around 30%: a third to materials,
  * the rest covering gas, packaging, rent, the stall, labour, and profit. Under
  * 25% is comfortable, over 40% is thin once everything else is paid, and above
- * 100% the dish costs more than it sells for.
+ * 100% the product costs more than it sells for.
  *
  * These are rules of thumb, not physics, which is why the UI shows the actual
  * percentage next to the verdict rather than only a colour.
@@ -414,12 +414,12 @@ export function marginFor(price: number, cost: number, costed: boolean): Margin 
   return { gross, foodCostPct, marginPct: (gross / p) * 100, verdict };
 }
 
-/** What this ingredient's remaining stock is worth. */
-export function stockValue(i: Ingredient): number {
+/** What this material's remaining stock is worth. */
+export function stockValue(i: Material): number {
   return (Number(i.stock) || 0) * (Number(i.cost) || 0);
 }
 
-export function isLow(i: Ingredient): boolean {
+export function isLow(i: Material): boolean {
   const reorder = Number(i.reorder) || 0;
   return reorder > 0 && (Number(i.stock) || 0) <= reorder;
 }
@@ -429,7 +429,7 @@ export function isLow(i: Ingredient): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Where a dish sits on the only two axes that matter.
+ * Where a product sits on the only two axes that matter.
  *
  * Popularity and margin, each split at the average, giving four boxes the
  * restaurant trade has used for decades. The value is not the label — it is
@@ -446,7 +446,7 @@ export const MENU_CLASS: Record<
   star: {
     label: "Star",
     blurb: "Sells well and earns well.",
-    action: "Protect it. Keep it consistent, keep the ingredients in stock, don't discount it.",
+    action: "Protect it. Keep it consistent, keep the materials in stock, don't discount it.",
     chip: "bg-ok-600 text-paper-50",
   },
   plowhorse: {
@@ -474,7 +474,7 @@ export const MENU_CLASS: Record<
  *
  * A median guarantees a 50/50 split whatever the numbers look like, which
  * would label half the menu "Dog" even in a shop where everything sells. The
- * average moves with the shop, so a menu where one dish carries the day is
+ * average moves with the shop, so a menu where one product carries the day is
  * described as exactly that.
  */
 export function classifyMenu(
@@ -511,33 +511,33 @@ export function menuClassFor(
  * Servings the shelf can still produce.
  *
  * Worked out from live stock every time it is asked, and deliberately NOT
- * written back to `meals.is_available`. That column is the owner's own switch
+ * written back to `products.is_available`. That column is the owner's own switch
  * — "we've 86'd it today" — and a background process overwriting it would
  * destroy an intent the system can't tell apart from its own guess, then need
  * undoing on every restock. Availability from stock is derived; availability
  * by decision is stored. Two different facts, two different homes.
  *
- * A dish with no recipe returns Infinity rather than zero. We don't know what
+ * A product with no recipe returns Infinity rather than zero. We don't know what
  * it takes, so we can't say it can't be made — and refusing to sell something
  * because nobody has entered its recipe yet would be the software inventing a
  * shortage.
  */
 export function makeableServings(
-  mealId: string,
-  mealIngredients: MealIngredient[],
-  mealComponents: MealComponent[],
-  ingredients: Ingredient[],
-  batches: Batch[],
+  productId: string,
+  productMaterials: MealIngredient[],
+  productComponents: MealComponent[],
+  materials: Material[],
+  production_runs: ProductionRun[],
   seen: Set<string> = new Set()
 ): number {
-  if (seen.has(mealId)) return Infinity; // a combo containing itself
-  const next = new Set([...seen, mealId]);
+  if (seen.has(productId)) return Infinity; // a combo containing itself
+  const next = new Set([...seen, productId]);
 
-  const ingById = new Map(ingredients.map((i) => [i.id, i]));
-  const batchById = new Map(batches.map((b) => [b.id, b]));
+  const ingById = new Map(materials.map((i) => [i.id, i]));
+  const batchById = new Map(production_runs.map((b) => [b.id, b]));
 
-  const lines = mealIngredients.filter((mi) => mi.meal_id === mealId);
-  const parts = mealComponents.filter((mc) => mc.meal_id === mealId);
+  const lines = productMaterials.filter((mi) => mi.product_id === productId);
+  const parts = productComponents.filter((mc) => mc.product_id === productId);
   if (lines.length === 0 && parts.length === 0) return Infinity;
 
   let limit = Infinity;
@@ -546,14 +546,14 @@ export function makeableServings(
     const need = Number(line.qty) || 0;
     if (need <= 0) continue;
     const have =
-      line.ref_type === "batch"
-        ? Number(batchById.get(line.ref_id)?.batch_stock ?? 0)
+      line.ref_type === "production_run"
+        ? Number(batchById.get(line.ref_id)?.run_stock ?? 0)
         : Number(ingById.get(line.ref_id)?.stock ?? 0);
     // A line pointing at something deleted is a broken recipe, not an empty
     // shelf. The costing screens already name it; blocking sales over it
     // would turn a data problem into lost trade.
     const exists =
-      line.ref_type === "batch"
+      line.ref_type === "production_run"
         ? batchById.has(line.ref_id)
         : ingById.has(line.ref_id);
     if (!exists) continue;
@@ -565,10 +565,10 @@ export function makeableServings(
     if (qty <= 0) continue;
     const child = makeableServings(
       part.component_meal_id,
-      mealIngredients,
-      mealComponents,
-      ingredients,
-      batches,
+      productMaterials,
+      productComponents,
+      materials,
+      production_runs,
       next
     );
     limit = Math.min(limit, Math.floor(child / qty));

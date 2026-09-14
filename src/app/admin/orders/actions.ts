@@ -1,0 +1,318 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { can, getViewer } from "@/lib/auth";
+import { notifyOrderStatus } from "@/lib/notify";
+import { syncStockForStatus } from "@/lib/stock-server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { pushToStaff } from "@/lib/push";
+import { ORDER_STATUSES, type OrderStatus } from "@/lib/orders";
+import { PAYMENT_STATUSES, type PaymentStatus } from "@/lib/payments";
+import { NOT_ON_SHIFT, offShift } from "@/lib/shift-guard";
+import { cleanReason } from "@/lib/cancellation";
+import { orderLabel } from "@/lib/tickets";
+import { findOrders } from "@/lib/orders-admin-server";
+import type { AdminOrder } from "@/components/admin-order-list";
+
+const BLOCKED_MESSAGE =
+  "The database didn't accept that change. Re-run the latest migration (0004) in the Supabase SQL Editor.";
+
+function revalidateOrders() {
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin");
+  revalidatePath("/orders");
+}
+
+/**
+ * Once the food is ready, the ETA has done its job and becomes a lie.
+ *
+ * The countdown answers one question — "how long until my food is ready?" —
+ * and the moment the shop marks it ready that question is settled. Leaving it
+ * running means a customer standing at the stall with their food in front of
+ * them watching a clock that says four more minutes. And on a delivery order
+ * the shop's cooking estimate says nothing about when a rider will arrive;
+ * only the rider knows that, and they will ring.
+ */
+const ETA_IS_OVER: OrderStatus[] = [
+  "ready",
+  "out_for_delivery",
+  "completed",
+  "cancelled",
+];
+
+/**
+ * Who did this, on the record.
+ *
+ * Counter sales already carried `logged_by`, so a walk-in has always had a
+ * name on it. An online order did not: moving one to "completed", or marking
+ * a customer's GCash payment as received, changed the row and left nothing
+ * saying who decided it. Those are the two moments most worth being able to
+ * ask about later — one hands over food, the other says money arrived — and
+ * "the system says it was paid" is not an answer when the drawer is short.
+ *
+ * Written with the admin client and never fatal: losing the log line is bad,
+ * losing the status change it describes because the log failed is worse.
+ */
+async function record(
+  description: string,
+  actorId: string | null
+): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("activity_log")
+    .insert({ category: "orders", description, actor: actorId });
+  if (error) console.error(`[orders] log: ${error.message}`);
+}
+
+/** A person, as they should read on the activity page. */
+function nameOf(viewer: Awaited<ReturnType<typeof getViewer>>): string {
+  return viewer?.profile?.full_name?.trim() || viewer?.email || "someone";
+}
+
+/**
+ * How the order should be named in the record.
+ *
+ * These lines used to carry the raw uuid — "set order 3f9c1a8e-… to
+ * completed" — which is a record of something the owner cannot look up. The
+ * ticket is what the receipt says, what the board shows and what the search
+ * box on Orders matches, so it is what goes here, with the customer's name
+ * beside it when there is one.
+ */
+type Named = { ticket: number | null; contact_name: string | null };
+const labelOf = (row: Named | undefined) =>
+  row ? orderLabel(row.ticket, row.contact_name) : "an order";
+
+export async function setOrderStatus(
+  orderId: string,
+  status: OrderStatus,
+  /**
+   * Why, and required when cancelling.
+   *
+   * Cancelling is the one status change that takes money back out of the
+   * drawer, and until now the shop could do it with nothing recorded at all —
+   * `cancelled_reason` had one writer, the customer cancelling their own
+   * order. So the owner could see that a paid order had become a cancelled
+   * one and had no way to ask about it.
+   */
+  reason?: string
+): Promise<{ error: string | null }> {
+  if (!ORDER_STATUSES.includes(status)) {
+    return { error: "Unknown status." };
+  }
+
+  const viewer = await getViewer();
+  if (!can(viewer, "orders")) return { error: "Not allowed." };
+  if (await offShift(viewer)) return { error: NOT_ON_SHIFT };
+
+  const why = status === "cancelled" ? cleanReason(reason) : null;
+  if (why?.error) return { error: why.error };
+
+  const supabase = await createClient();
+  // `.select()` matters: without it PostgREST reports success even when a
+  // row-level security policy silently matched nothing.
+  const { data, error } = await supabase
+    .from("orders")
+    .update({
+      status,
+      // Cleared in the same write as the status, not in a second one: two
+      // updates would leave a window where the order is ready and the clock
+      // is still counting, and that window is exactly when the customer is
+      // looking.
+      ...(ETA_IS_OVER.includes(status)
+        ? { eta_minutes: null, eta_set_at: null }
+        : {}),
+      // Stamped in the same write as the status, so there is no moment where
+      // an order is cancelled and nobody owns it. Cleared when an order is
+      // moved back off cancelled — a stale "cancelled by" on a live order is
+      // a worse record than none.
+      ...(status === "cancelled"
+        ? {
+            cancelled_reason: why!.reason,
+            cancelled_by: viewer?.profile?.id ?? null,
+            cancelled_at: new Date().toISOString(),
+          }
+        : { cancelled_reason: null, cancelled_by: null, cancelled_at: null }),
+    })
+    .eq("id", orderId)
+    .select("id, ticket, contact_name");
+
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: BLOCKED_MESSAGE };
+
+  // Confirming an order is the moment its materials stop being available
+  // for anything else, so that is when they come off the shelf. Idempotent,
+  // so moving on through preparing/ready/completed changes nothing again.
+  await syncStockForStatus(orderId, status);
+
+  // Awaited rather than fired and forgotten: on serverless the function can
+  // be frozen the moment the response is returned, which would drop a
+  // dangling promise silently. It swallows its own failures, so the status
+  // change can't be held up by a mail problem.
+  await notifyOrderStatus(orderId);
+
+  await record(
+    `${nameOf(viewer)} set ${labelOf((data as Named[])[0])} to ${status}` +
+      (why?.reason ? ` — ${why.reason}` : ""),
+    viewer?.profile?.id ?? null
+  );
+
+  revalidateOrders();
+  return { error: null };
+}
+
+/**
+ * The shop's promise to the customer: how many minutes until pickup/delivery.
+ * Stored as a duration rather than a timestamp so it reads the same whether
+ * the customer looks now or in five minutes, and so staff can set it with one
+ * tap from a few presets.
+ */
+export async function setOrderEta(
+  orderId: string,
+  minutes: number | null
+): Promise<{ error: string | null }> {
+  const viewer = await getViewer();
+  if (!can(viewer, "orders")) return { error: "Not allowed." };
+  if (await offShift(viewer)) return { error: NOT_ON_SHIFT };
+
+  if (minutes !== null && (!Number.isFinite(minutes) || minutes < 0 || minutes > 600)) {
+    return { error: "Enter an ETA between 0 and 600 minutes." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .update({
+      eta_minutes: minutes,
+      // Stamped so the customer's countdown runs from when the promise was
+      // made, not from when they happened to open the page.
+      eta_set_at: minutes === null ? null : new Date().toISOString(),
+      // A new ETA is a new promise, so it earns a new alert. Without this,
+      // extending a late order by ten minutes would buy silence instead of
+      // ten more minutes — the one case where the alert matters most.
+      eta_alerted_at: null,
+    })
+    .eq("id", orderId)
+    .select("id");
+
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: BLOCKED_MESSAGE };
+
+  revalidateOrders();
+  return { error: null };
+}
+
+/**
+ * Confirm (or un-confirm) that a payment actually arrived. Staff check the
+ * reference against their own GCash records — nothing here can verify it for
+ * them, so this only records the human decision.
+ */
+export async function setPaymentStatus(
+  orderId: string,
+  status: PaymentStatus
+): Promise<{ error: string | null }> {
+  if (!PAYMENT_STATUSES.includes(status)) return { error: "Unknown payment status." };
+
+  const viewer = await getViewer();
+  if (!can(viewer, "orders")) return { error: "Not allowed." };
+  if (await offShift(viewer)) return { error: NOT_ON_SHIFT };
+
+  const now = new Date().toISOString();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .update({
+      payment_status: status,
+      paid_at: status === "paid" ? now : null,
+      // Stamped when the down payment is confirmed, and kept once the order
+      // is settled in full — the customer's record of "you confirmed my
+      // ₱276 at 2:15pm" shouldn't vanish when the balance is collected.
+      // Cleared only if the payment is walked back to unpaid.
+      ...(status === "partial"
+        ? { downpayment_confirmed_at: now }
+        : status === "unpaid" || status === "refunded"
+          ? { downpayment_confirmed_at: null }
+          : {}),
+    })
+    .eq("id", orderId)
+    .select("id, ticket, contact_name");
+
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: BLOCKED_MESSAGE };
+
+  await record(
+    `${nameOf(viewer)} marked payment for ${labelOf((data as Named[])[0])} as ${status}`,
+    viewer?.profile?.id ?? null
+  );
+
+  revalidateOrders();
+  return { error: null };
+}
+
+/**
+ * Tell the shop that a promised ETA has run out.
+ *
+ * The countdown lives in the browser, so the trigger has to as well — HQ open
+ * on the counter tablet is the timer, and this turns that into a push on the
+ * owner's phone in their pocket. That's the whole point: they're at the wok,
+ * not watching a screen, and the question "is that one ready or does the cook
+ * need chasing?" is the one thing the tablet can't answer for them.
+ *
+ * The honest limit: with no HQ tab open anywhere, nothing fires. Reaching a
+ * closed browser would need a scheduled job on the server, which this shop
+ * doesn't run.
+ *
+ * `eta_alerted_at` is claimed with a conditional update before anything is
+ * sent, so two open tabs hitting zero in the same second still produce one
+ * alert. A claim that loses the race simply returns.
+ */
+export async function alertEtaElapsed(
+  orderId: string
+): Promise<{ error: string | null }> {
+  const viewer = await getViewer();
+  if (!can(viewer, "orders")) return { error: "Not allowed." };
+
+  try {
+    const db = createAdminClient();
+
+    // Claim first. `is("eta_alerted_at", null)` is what makes this safe: the
+    // second tab's update matches no rows and it stops here.
+    const { data: claimed } = await db
+      .from("orders")
+      .update({ eta_alerted_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .is("eta_alerted_at", null)
+      .in("status", ["pending", "confirmed", "preparing"])
+      .select("id, contact_name, eta_minutes");
+
+    const order = claimed?.[0];
+    if (!order) return { error: null };
+
+    const name = (order.contact_name as string | null)?.trim() || "A customer";
+    await pushToStaff({
+      title: `⏰ Time's up — ${name}`,
+      body: `The ${order.eta_minutes} min you promised is done. Ready to hand over, or does the cook need a nudge?`,
+      url: "/admin/orders",
+      // One order, one slot on the lock screen — same as the customer's.
+      tag: `eta-${orderId}`,
+    });
+
+    return { error: null };
+  } catch {
+    // An alert is a courtesy. It must never break the page it fired from.
+    return { error: null };
+  }
+}
+
+/**
+ * Search every order, not just the ones the board loaded.
+ *
+ * Read-only, so it is NOT behind the shift gate. Looking at the shop's own
+ * records is not changing them, and a clocked-out member of staff who cannot
+ * even read the board is being punished rather than prevented — the banner
+ * and the write gate are the boundary.
+ */
+export async function searchAllOrders(query: string): Promise<AdminOrder[]> {
+  const viewer = await getViewer();
+  if (!can(viewer, "orders")) return [];
+  return findOrders(query);
+}

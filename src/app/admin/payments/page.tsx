@@ -1,0 +1,96 @@
+import { moneyRound } from "@/lib/format";
+import { NotAllowed } from "@/components/not-allowed";
+import { can, getViewer } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { getPaymentSettings } from "@/lib/payments-server";
+import { PaymentSettingsForm } from "@/components/payment-settings-form";
+import { PaymentLedger, type LedgerRow } from "@/components/payment-ledger";
+import { PaymentsTabs } from "@/components/payments-tabs";
+import { isOutstanding, moneyState } from "@/lib/payments";
+import { hqTitle } from "@/lib/hq-theme";
+
+const COLUMNS =
+  "id, created_at, status, contact_name, contact_phone, revenue, delivery_fee, payment_method, payment_status, payment_plan, payment_reference, payment_receipt_url, downpayment_amount, downpayment_confirmed_at";
+
+async function getLedger(): Promise<{ rows: LedgerRow[]; error: string | null }> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("orders")
+      .select(COLUMNS)
+      .order("created_at", { ascending: false })
+      .limit(300);
+
+    // Saying "no payments" when the query failed is the same lie the Orders
+    // page used to tell, and here it would read as "nobody owes you anything".
+    if (error) return { rows: [], error: error.message };
+    return { rows: (data ?? []) as unknown as LedgerRow[], error: null };
+  } catch (e) {
+    return { rows: [], error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
+export default async function AdminPaymentsPage() {
+  const viewer = await getViewer();
+  // Hidden from the sidebar too, but hiding a link is not a permission:
+  // a bookmark reaches this page all the same.
+  if (!can(viewer, "settings")) {
+    return <NotAllowed>Payment settings are the owner&apos;s. Confirming a customer&apos;s GCash reference is on the order board.</NotAllowed>;
+  }
+
+  const [settings, { rows, error }] = await Promise.all([
+    getPaymentSettings(),
+    getLedger(),
+  ]);
+
+  // The same rule as the sidebar badge: everything the shop is still waiting
+  // on money for. If these two ever disagree, the badge is pointing at a
+  // number the page doesn't show.
+  const waiting = rows.filter(
+    (r) => r.status !== "cancelled" && isOutstanding(r.payment_status)
+  ).length;
+
+  const owed = rows.reduce((sum, r) => sum + moneyState(r).balance, 0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className={hqTitle}>Payments</h2>
+        <p className="mt-1 max-w-2xl text-sm text-ink-900/60">
+          GCash here is manual — customers send the money in the GCash app and
+          give you the reference number, and you confirm it against your own
+          records. No merchant account and no transaction fees.
+        </p>
+        {owed > 0 && (
+          <p className="mt-3 inline-block rounded-full bg-brand-50 px-4 py-2 text-sm font-bold text-brand-800 ring-1 ring-brand-700/25">
+            {moneyRound(owed)} still
+            owed across {rows.filter((r) => moneyState(r).balance > 0).length}{" "}
+            order
+            {rows.filter((r) => moneyState(r).balance > 0).length === 1 ? "" : "s"}
+          </p>
+        )}
+      </div>
+
+      {error && (
+        <div className="rounded-3xl bg-brand-50 p-6 ring-2 ring-brand-700/40">
+          <p className="font-display text-lg font-black text-brand-800">
+            Couldn&apos;t load the payment list
+          </p>
+          <p className="mt-2 text-sm text-ink-900/70">
+            This is a database error, not an empty ledger — nobody&apos;s
+            payment record has been lost. Your settings below still work.
+          </p>
+          <p className="mt-3 rounded-xl bg-paper-50 px-4 py-3 font-mono text-xs text-ink-900/70">
+            {error}
+          </p>
+        </div>
+      )}
+
+      <PaymentsTabs
+        waiting={waiting}
+        ledger={<PaymentLedger rows={rows} />}
+        settings={<PaymentSettingsForm initial={settings} />}
+      />
+    </div>
+  );
+}

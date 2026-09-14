@@ -87,7 +87,7 @@ test("it says it is not an official receipt", () => {
   assert.match(textOf(sale), /not an official receipt/i);
 });
 
-test("a long dish name wraps instead of losing its price", () => {
+test("a long product name wraps instead of losing its price", () => {
   const long: Receipt = {
     ...sale,
     lines: [{ name: "Extra Spicy Black Pepper Beef Noodles with Egg", qty: 1, price: 145 }],

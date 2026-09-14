@@ -24,26 +24,26 @@ export const RESTORE_ORDER = [
   "payment_settings",
   "chat_settings",
   "profiles",
-  "ingredients",
-  "ingredient_lots",
-  "batches",
-  "batch_ingredients",
-  // Categories before meals: nothing enforces it with a foreign key, but a
-  // menu that comes back before its own vocabulary shows every dish
+  "materials",
+  "material_lots",
+  "production_runs",
+  "production_run_materials",
+  // Categories before products: nothing enforces it with a foreign key, but a
+  // menu that comes back before its own vocabulary shows every product
   // uncoloured until the next table lands.
-  "menu_categories",
-  "meals",
-  "meal_ingredients",
-  "meal_components",
-  "meal_packaging",
+  "catalog_categories",
+  "products",
+  "product_materials",
+  "product_components",
+  "product_packaging",
   "order_packaging",
   // Shifts before orders: an order carries `shift_id`.
   "staff_shifts",
   "orders",
   "order_lines",
-  "purchase_log",
-  "consumption_log",
-  "waste_log",
+  "purchases",
+  "material_usage",
+  "waste",
   "cash_ledger",
   "receivables",
   "cycle_counts",
@@ -119,7 +119,7 @@ export function unknownTables(file: BackupFile): string[] {
  * database — a backup of this system carries them and upserts cleanly, but a
  * file converted from the old phone app cannot know them. Inserting such rows
  * a second time would not replace the first set, it would add to it: every
- * recipe would list each ingredient twice, and every cost computed from a
+ * recipe would list each material twice, and every cost computed from a
  * recipe would silently double.
  *
  * So the rule is written in terms of the rows themselves rather than in terms
@@ -131,10 +131,10 @@ export function unknownTables(file: BackupFile): string[] {
  * wrong.
  */
 export const CHILD_PARENT: Record<string, string> = {
-  meal_ingredients: "meal_id",
-  meal_components: "meal_id",
-  meal_packaging: "meal_id",
-  batch_ingredients: "batch_id",
+  product_materials: "product_id",
+  product_components: "product_id",
+  product_packaging: "product_id",
+  production_run_materials: "production_run_id",
   order_lines: "order_id",
 };
 

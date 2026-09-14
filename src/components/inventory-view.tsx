@@ -1,0 +1,871 @@
+"use client";
+import { money } from "@/lib/format";
+import { brand } from "../../config/index.ts";
+
+import { useMemo, useState } from "react";
+import {
+  CountForm,
+  IngredientForm,
+  RestockForm,
+  type EditableIngredient,
+} from "@/components/material-forms";
+import {
+  ProduceBatchForm,
+  RecipeEditor,
+  type RecipeOption,
+} from "@/components/recipe-editor";
+import { WasteForm } from "@/components/waste-form";
+import { hqTitle } from "@/lib/hq-theme";
+
+export type StockRow = {
+  id: string;
+  name: string;
+  unit: string;
+  stock: number;
+  reorder: number;
+  unitCost: number;
+  value: number;
+  low: boolean;
+  buysAs: string | null;
+  categories: string[];
+  purchasePrice: number;
+  purchaseQty: number;
+  /** How much the last delivery's price moved against the one before it. */
+  priceMovePct: number | null;
+};
+
+/** The shape the forms want, from the shape the list already has. */
+function editable(s: StockRow): EditableIngredient {
+  return {
+    id: s.id,
+    name: s.name,
+    unit: s.unit,
+    purchasePrice: s.purchasePrice,
+    purchaseQty: s.purchaseQty,
+    reorder: s.reorder,
+    categories: s.categories,
+    stock: s.stock,
+    unitCost: s.unitCost,
+  };
+}
+
+/** Which dialog is open, and over which row. */
+export type SuggestionRow = {
+  id: string;
+  name: string;
+  unit: string;
+  stock: number;
+  dailyAvg: number;
+  daysLeft: number;
+  buy: number;
+  cost: number;
+  coveredBy: { name: string; qty: number; unit: string }[];
+};
+
+export type ExpiringRow = {
+  name: string;
+  unit: string;
+  qty: number;
+  cost: number;
+  expiryDate: string;
+  daysLeft: number;
+};
+
+type Editing =
+  | { kind: "new" }
+  | { kind: "waste" }
+  | { kind: "edit" | "restock" | "count"; row: StockRow }
+  | { kind: "produce" | "recipe"; production_run: BatchRow }
+  | null;
+
+export type BatchRow = {
+  id: string;
+  name: string;
+  /** What goes into one production_run, so the produce dialog can check the shelf. */
+  recipe: { materialId: string; qty: number }[];
+  yieldQty: number;
+  yieldUnit: string;
+  stock: number;
+  reorder: number;
+  total: number;
+  perUnit: number;
+  unknown: boolean;
+  problems: string[];
+  lineCount: number;
+};
+
+/**
+ * What's in the store room.
+ *
+ * The screen answers two questions and puts the urgent one first: what do I
+ * need to buy before the next service, and how much money is sitting on the
+ * shelves. Everything else is a table, and a table is fine — but a shopping
+ * list read off a table at 5am is how you forget the thing you ran out of last
+ * week.
+ *
+ * Staff see the stock levels, because staff are the ones who notice something
+ * is nearly gone. They don't see what it costs: supplier prices are the
+ * owner's.
+ */
+
+/** Stock against its reorder level, as one glanceable bar. */
+function StockBar({ stock, reorder }: { stock: number; reorder: number }) {
+  if (reorder <= 0) {
+    // No reorder level set, so there is no "low" to draw. Saying so beats
+    // drawing a bar that silently means nothing.
+    return (
+      <div className="h-2 w-full rounded-full bg-ink-950/[0.07]" aria-hidden />
+    );
+  }
+  // Full bar = twice the reorder level, so a healthy shelf sits around the
+  // middle and there's visible room above the line as well as below it.
+  const pct = Math.max(2, Math.min(100, (stock / (reorder * 2)) * 100));
+  const low = stock <= reorder;
+  return (
+    <div className="relative h-2 w-full overflow-hidden rounded-full bg-ink-950/[0.07]">
+      <div
+        className={`h-full rounded-full ${low ? "bg-brand-700" : "bg-ok-500"}`}
+        style={{ width: `${pct}%` }}
+      />
+      <div className="absolute inset-y-0 left-1/2 w-px bg-ink-950/30" aria-hidden />
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+  tone = "plain",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone?: "plain" | "good" | "bad";
+}) {
+  const skin = {
+    plain: "bg-paper-100 text-ink-950 ring-ink-950/10",
+    good: "bg-ok-600 text-paper-50 ring-ok-700/30",
+    bad: "bg-brand-700 text-paper-50 ring-brand-800/30",
+  }[tone];
+  return (
+    <div className={`rounded-3xl p-4 ring-1 sm:p-5 ${skin}`}>
+      <p className="text-[10px] font-black uppercase tracking-widest opacity-60 sm:text-[11px]">
+        {label}
+      </p>
+      <p className="mt-1 font-display text-2xl font-black tabular-nums sm:text-3xl">
+        {value}
+      </p>
+      <p className="mt-1 text-[11px] leading-snug opacity-70 sm:text-xs">{sub}</p>
+    </div>
+  );
+}
+
+export function InventoryView({
+  stock,
+  production_runs,
+  suggestions,
+  expiring,
+  usageDays,
+  thinHistory,
+  canSeeCosts,
+  canManage,
+  failed,
+}: {
+  stock: StockRow[];
+  production_runs: BatchRow[];
+  suggestions: SuggestionRow[];
+  expiring: ExpiringRow[];
+  /** Days of consumption history the averages are built on. */
+  usageDays: number;
+  thinHistory: boolean;
+  canSeeCosts: boolean;
+  /**
+   * May this person move stock, or only look at it?
+   *
+   * Separate from `canSeeCosts` because they are separate questions and the
+   * shop answers them differently: a manager restocks all day and never needs
+   * to know what the shop's margin is. Squashing the two into one flag is
+   * what would force the owner to hand over the books to get a shelf counted.
+   */
+  canManage: boolean;
+  failed: string[];
+}) {
+  const [tab, setTab] = useState<"stock" | "production_runs">("stock");
+  const [query, setQuery] = useState("");
+  const [lowOnly, setLowOnly] = useState(false);
+  const [editing, setEditing] = useState<Editing>(null);
+
+  // Offered as suggestions rather than a fixed list: the shop's own units and
+  // tags are the right vocabulary, and a dropdown of ours would just be one
+  // more thing that doesn't fit.
+  const units = useMemo(
+    () => [...new Set(stock.map((s) => s.unit).filter(Boolean))].sort(),
+    [stock]
+  );
+  const allCategories = useMemo(
+    () => [...new Set(stock.flatMap((s) => s.categories))].sort(),
+    [stock]
+  );
+
+  // Which tag is being looked at, if any. One at a time rather than several:
+  // "show me the meats" is the question people actually ask standing at the
+  // shelf, and a multi-select turns one tap into a small task.
+  const [tag, setTag] = useState<string | null>(null);
+
+  // The shopping list is long on a stall that carries a lot, and the top of
+  // it is the part that matters — it is sorted by how soon each thing runs
+  // out. Five is what fits on a phone at 5am without scrolling.
+  const [showAllBuy, setShowAllBuy] = useState(false);
+
+  // Everything a recipe line can point at, priced. Materials only — a production_run
+  // made of production_runs is a recursion nobody at the stall asked for.
+  const ingredientOptions: RecipeOption[] = useMemo(
+    () =>
+      stock.map((s) => ({
+        id: s.id,
+        name: s.name,
+        unit: s.unit,
+        unitCost: s.unitCost,
+        kind: "inv" as const,
+        stock: s.stock,
+      })),
+    [stock]
+  );
+
+  const low = useMemo(() => stock.filter((s) => s.low), [stock]);
+  const totalValue = useMemo(
+    () => stock.reduce((sum, s) => sum + s.value, 0),
+    [stock]
+  );
+  const unpriced = useMemo(
+    () => stock.filter((s) => s.unitCost <= 0).length,
+    [stock]
+  );
+  const lowBatches = useMemo(
+    () => production_runs.filter((b) => b.reorder > 0 && b.stock <= b.reorder),
+    [production_runs]
+  );
+
+  const shownStock = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return stock
+      .filter((s) => {
+        if (lowOnly && !s.low) return false;
+        if (tag && !s.categories.includes(tag)) return false;
+        if (!q) return true;
+        return (
+          s.name.toLowerCase().includes(q) ||
+          s.categories.some((c) => c.toLowerCase().includes(q))
+        );
+      })
+      // Low first — the only ordering that makes the list actionable rather
+      // than merely complete.
+      .sort((a, b) => Number(b.low) - Number(a.low) || a.name.localeCompare(b.name));
+  }, [stock, query, lowOnly, tag]);
+
+  const shownBatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return production_runs
+      .filter((b) => !q || b.name.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [production_runs, query]);
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className={hqTitle}>Inventory</h2>
+          <p className="mt-1 max-w-2xl text-sm text-ink-900/60">
+            What&apos;s on the shelf, what&apos;s running out, and the sauces and
+            marinades you make in bulk. Selling now takes stock off the shelf.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            onClick={() => setEditing({ kind: "waste" })}
+            className="rounded-2xl bg-ink-950/5 px-5 py-3 text-sm font-black text-ink-900/70 ring-1 ring-ink-950/10 transition-colors hover:bg-brand-700 hover:text-paper-50"
+          >
+            Log waste
+          </button>
+          {/* Logging waste stays with everyone. Throwing away a burnt production_run
+              happens at the moment it burns, by whoever burnt it — a system
+              that makes that need a manager is a system where waste quietly
+              stops being logged and the shelf drifts from the count. */}
+          {canManage && (
+            <button
+              onClick={() => setEditing({ kind: "new" })}
+              className="rounded-2xl bg-ink-950 px-5 py-3 text-sm font-black text-paper-50 transition-colors hover:bg-ink-900"
+            >
+              + Add a material
+            </button>
+          )}
+        </div>
+      </div>
+
+      {failed.length > 0 && (
+        <p className="rounded-2xl bg-brand-700 px-5 py-4 text-sm text-paper-50">
+          <strong>Couldn&apos;t read {failed.join(", ")}.</strong> Anything
+          missing below is missing because of that, not because it&apos;s gone.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <Stat
+          label="Running low"
+          value={String(low.length)}
+          sub={low.length === 0 ? "Nothing needs buying" : "At or below reorder level"}
+          tone={low.length === 0 ? "good" : "bad"}
+        />
+        {canSeeCosts && (
+          <Stat
+            label="Stock value"
+            value={money(totalValue, 0)}
+            sub="Money sitting on the shelves"
+          />
+        )}
+        <Stat
+          label="Materials"
+          value={String(stock.length)}
+          sub={
+            unpriced === 0
+              ? "All priced"
+              : `${unpriced} with no price — costs will read low`
+          }
+        />
+        <Stat
+          label="ProductionRuns"
+          value={String(production_runs.length)}
+          sub={
+            lowBatches.length === 0
+              ? "Sauces and marinades you prep"
+              : `${lowBatches.length} need${lowBatches.length === 1 ? "s" : ""} making`
+          }
+        />
+      </div>
+
+      {/* Going off first: no amount of restocking fixes something already in
+          the fridge with two days left on it. */}
+      {expiring.length > 0 && (
+        <section className="rounded-3xl bg-warn-500/15 p-6 ring-1 ring-warn-500/30">
+          <h3 className="font-display text-xl font-black text-ink-950">
+            Use these first
+          </h3>
+          <p className="mt-1 text-sm text-ink-900/60">
+            {expiring.length} lot{expiring.length === 1 ? "" : "s"} at or near
+            the date. Cooking draws on the oldest first automatically — this is
+            so you can plan around it.
+          </p>
+          <ul className="mt-4 flex flex-wrap gap-2">
+            {expiring.map((e, i) => (
+              <li
+                key={i}
+                className={`rounded-2xl px-4 py-2.5 ring-1 ${
+                  e.daysLeft < 0
+                    ? "bg-brand-700 text-paper-50 ring-brand-800/30"
+                    : "bg-paper-50 text-ink-950 ring-ink-950/10"
+                }`}
+              >
+                <span className="font-bold">{e.name}</span>
+                <span className="ml-2 text-sm tabular-nums">
+                  {e.qty.toLocaleString(brand.locale)} {e.unit}
+                </span>
+                <span
+                  className={`ml-2 text-xs font-bold ${
+                    e.daysLeft < 0 ? "text-paper-100/80" : "text-warn-700"
+                  }`}
+                >
+                  {e.daysLeft < 0
+                    ? `${Math.abs(e.daysLeft)}d past`
+                    : e.daysLeft === 0
+                      ? "today"
+                      : `${e.daysLeft}d left`}
+                </span>
+                {canSeeCosts && (
+                  <span className="ml-2 text-xs opacity-50">{money(e.cost, 0)}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Before there is any sales history there is nothing to average, so the
+          shopping list simply wouldn't render — and an absent panel looks
+          like a broken one. This says why, and points at the levels the
+          owner set, which are all there is to go on in week one. */}
+      {suggestions.length === 0 && low.length > 0 && (
+        <section className="rounded-3xl border-2 border-dashed border-ink-950/15 p-6">
+          <h3 className="font-display text-lg font-black text-ink-950">
+            No usage history yet
+          </h3>
+          <p className="mt-1 max-w-2xl text-sm text-ink-900/60">
+            Once sales start going through, this becomes a shopping list worked
+            out from what you actually get through in a day. Until then, the{" "}
+            {low.length} flagged below are against the reorder levels you set
+            yourself.
+          </p>
+        </section>
+      )}
+
+      {/* The shopping list. Above the table, because at 5am nobody scrolls.
+          Built from what the shop actually gets through rather than from the
+          reorder number somebody guessed once — and it says how long each one
+          has left, which is the part a static level can never tell you. */}
+      {suggestions.length > 0 && (
+        <section className="rounded-3xl bg-ink-950 p-6 text-paper-50">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="font-display text-xl font-black">
+              Buy before the next service
+            </h3>
+            {canSeeCosts && (
+              <span className="font-display text-lg font-black tabular-nums text-accent-200">
+                {money(suggestions.reduce((sum, s) => sum + s.cost, 0), 0)}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-paper-100/60">
+            {thinHistory
+              ? `Based on only ${usageDays} day${usageDays === 1 ? "" : "s"} of sales so far — treat it as a rough first guess.`
+              : `Worked out from what you've actually used over the last ${usageDays} days.`}
+          </p>
+          <ul className="mt-4 flex flex-col gap-2">
+            {(showAllBuy ? suggestions : suggestions.slice(0, 5)).map((s) => (
+              <li
+                key={s.id}
+                className="rounded-2xl bg-paper-50/10 px-4 py-3 ring-1 ring-paper-50/15"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <span className="font-bold">
+                    {s.name}
+                    <span className="ml-2 text-sm font-normal text-paper-100/50">
+                      {s.stock.toLocaleString(brand.locale)} {s.unit} left ·{" "}
+                      {s.dailyAvg.toLocaleString(brand.locale, {
+                        maximumFractionDigits: 1,
+                      })}{" "}
+                      {s.unit}/day
+                    </span>
+                  </span>
+                  <span className="text-sm">
+                    <span
+                      className={`font-black tabular-nums ${
+                        s.daysLeft < 1 ? "text-brand-300" : "text-accent-200"
+                      }`}
+                    >
+                      {s.daysLeft < 1
+                        ? "out now"
+                        : `${s.daysLeft.toFixed(1)} days left`}
+                    </span>
+                    <span className="ml-3 text-paper-100/70">
+                      buy ~{s.buy.toLocaleString(brand.locale, { maximumFractionDigits: 0 })}{" "}
+                      {s.unit}
+                    </span>
+                  </span>
+                </div>
+                {s.coveredBy.length > 0 && (
+                  <p className="mt-1 text-xs text-ok-400">
+                    Low, but you already have{" "}
+                    {s.coveredBy
+                      .map(
+                        (c) =>
+                          `${c.qty.toLocaleString(brand.locale)} ${c.unit} of ${c.name}`
+                      )
+                      .join(", ")}{" "}
+                    made.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          {/* No date range here, deliberately. This is not history — it is
+              what to buy before tonight, sorted by how soon each thing runs
+              out. A date picker on a list about the future would be a
+              control that answers nothing. */}
+          {suggestions.length > 5 && (
+            <button
+              onClick={() => setShowAllBuy((v) => !v)}
+              className="mt-4 rounded-full bg-paper-50/10 px-4 py-2 text-xs font-bold text-paper-100/80 ring-1 ring-paper-50/20 transition-colors hover:bg-paper-50 hover:text-ink-950"
+            >
+              {showAllBuy
+                ? "Show fewer"
+                : `See the rest — ${suggestions.length - 5} more`}
+            </button>
+          )}
+        </section>
+      )}
+
+      {/* Tabs */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2">
+          {([
+            { key: "stock" as const, label: "Materials", n: stock.length },
+            { key: "production_runs" as const, label: "ProductionRuns", n: production_runs.length },
+          ]).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              role="tab"
+              aria-selected={tab === t.key}
+              className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${
+                tab === t.key
+                  ? "bg-ink-950 text-paper-50"
+                  : "bg-paper-100 text-ink-900/70 ring-1 ring-ink-950/10 hover:bg-paper-200"
+              }`}
+            >
+              {t.label}
+              <span className="ml-2 tabular-nums opacity-50">{t.n}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tab === "stock" ? "Search a material…" : "Search a production_run…"}
+            className="min-w-0 flex-1 rounded-xl bg-paper-100 px-4 py-2.5 text-sm text-ink-950 ring-1 ring-ink-950/10 placeholder:text-ink-900/40 focus:outline-none focus:ring-2 focus:ring-accent-200"
+          />
+          {tab === "stock" && (
+            <button
+              onClick={() => setLowOnly((v) => !v)}
+              aria-pressed={lowOnly}
+              className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors ${
+                lowOnly
+                  ? "bg-brand-700 text-paper-50"
+                  : "bg-paper-100 text-ink-900/60 ring-1 ring-ink-950/10 hover:bg-paper-200"
+              }`}
+            >
+              Low stock only
+            </button>
+          )}
+        </div>
+
+        {/* The tags, as buttons.
+            
+            They were already on every material and already searchable by
+            typing — which is a fine feature and the wrong shape for the
+            question being asked. Standing at the shelf you do not want to
+            recall what the tag is called and spell it; you want to see what
+            the tags ARE and press one. Search finds a thing you can name;
+            these answer "what have I got". */}
+        {tab === "stock" && allCategories.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => setTag(null)}
+              aria-pressed={tag === null}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                tag === null
+                  ? "bg-ink-950 text-paper-50"
+                  : "bg-paper-100 text-ink-900/60 ring-1 ring-ink-950/10 hover:bg-paper-200"
+              }`}
+            >
+              All
+            </button>
+            {allCategories.map((c) => {
+              const n = stock.filter((s) => s.categories.includes(c)).length;
+              return (
+                <button
+                  key={c}
+                  onClick={() => setTag((v) => (v === c ? null : c))}
+                  aria-pressed={tag === c}
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                    tag === c
+                      ? "bg-ink-950 text-paper-50"
+                      : "bg-paper-100 text-ink-900/60 ring-1 ring-ink-950/10 hover:bg-paper-200"
+                  }`}
+                >
+                  {c}
+                  {/* The count is what makes the row scannable — an empty tag
+                      is worth knowing about before you press it. */}
+                  <span className="ml-1.5 tabular-nums opacity-50">{n}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {tab === "stock" ? (
+        shownStock.length === 0 ? (
+          <p className="rounded-2xl border-2 border-dashed border-brand-300 bg-paper-100 p-6 text-sm text-ink-900/70">
+            {query ? `Nothing matches “${query}”.` : "Nothing to show."}
+          </p>
+        ) : (
+          <ul className="grid gap-3 lg:grid-cols-2">
+            {shownStock.map((s) => (
+              <li
+                key={s.id}
+                className={`rounded-2xl bg-paper-100 p-4 ring-1 ${
+                  s.low ? "ring-brand-700/40" : "ring-ink-950/10"
+                }`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <p className="min-w-0 font-bold text-ink-950">{s.name}</p>
+                  <p className="shrink-0 text-sm tabular-nums text-ink-900/70">
+                    <strong
+                      className={`font-display text-base ${
+                        s.low ? "text-brand-700" : "text-ink-950"
+                      }`}
+                    >
+                      {s.stock.toLocaleString(brand.locale)}
+                    </strong>{" "}
+                    {s.unit}
+                  </p>
+                </div>
+
+                <div className="mt-2.5">
+                  <StockBar stock={s.stock} reorder={s.reorder} />
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-900/50">
+                  <span>
+                    {s.reorder > 0
+                      ? `Reorder at ${s.reorder.toLocaleString(brand.locale)} ${s.unit}`
+                      : "No reorder level set"}
+                  </span>
+                  {canSeeCosts && s.unitCost > 0 && (
+                    <>
+                      <span>{money(s.unitCost, 4)} / {s.unit}</span>
+                      <span>{money(s.value, 0)} on hand</span>
+                    </>
+                  )}
+                  {/* Against the previous delivery, not an average — an
+                      average smooths away exactly the jump worth knowing
+                      about. */}
+                  {canSeeCosts && s.priceMovePct !== null && (
+                    <span
+                      className={`font-bold ${
+                        s.priceMovePct > 0 ? "text-brand-700" : "text-ok-700"
+                      }`}
+                      title="Compared with the delivery before it"
+                    >
+                      {s.priceMovePct > 0 ? "↑" : "↓"}{" "}
+                      {Math.abs(s.priceMovePct).toFixed(0)}% since last buy
+                    </span>
+                  )}
+                  {canSeeCosts && s.unitCost <= 0 && (
+                    <span className="font-bold text-warn-700">No price set</span>
+                  )}
+                  {s.low && (
+                    <span className="rounded-full bg-brand-700 px-2 py-0.5 font-black uppercase tracking-wide text-paper-50">
+                      Low
+                    </span>
+                  )}
+                </div>
+
+                {/* Restock first and widest: it is the thing done most, and
+                    usually while holding a delivery in the other hand.
+
+                    Solid green only where restocking is actually the next
+                    action. Ninety-one saturated bars down the page would be
+                    decoration, and decoration that looks like a priority is
+                    worse than none — this way the colour is the shopping
+                    list, same as the red badge. */}
+                {canManage && (
+                <div className="mt-3 flex gap-1.5">
+                  <button
+                    onClick={() => setEditing({ kind: "restock", row: s })}
+                    className={`flex-1 rounded-xl py-2 text-xs font-black uppercase tracking-wide transition-colors ${
+                      s.low
+                        ? "bg-ok-600 text-paper-50 hover:bg-ok-700"
+                        : "bg-ok-600/10 text-ok-800 hover:bg-ok-600 hover:text-paper-50"
+                    }`}
+                  >
+                    Restock
+                  </button>
+                  <button
+                    onClick={() => setEditing({ kind: "count", row: s })}
+                    className="rounded-xl bg-ink-950/5 px-3 py-2 text-xs font-bold text-ink-900/70 transition-colors hover:bg-ink-950/10"
+                  >
+                    Count
+                  </button>
+                  <button
+                    onClick={() => setEditing({ kind: "edit", row: s })}
+                    className="rounded-xl bg-ink-950/5 px-3 py-2 text-xs font-bold text-ink-900/70 transition-colors hover:bg-ink-950/10"
+                  >
+                    Edit
+                  </button>
+                </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      ) : shownBatches.length === 0 ? (
+        <p className="rounded-2xl border-2 border-dashed border-brand-300 bg-paper-100 p-6 text-sm text-ink-900/70">
+          {query ? `Nothing matches “${query}”.` : "No production_runs yet."}
+        </p>
+      ) : (
+        <ul className="grid gap-3 lg:grid-cols-2">
+          {shownBatches.map((b) => {
+            const low = b.reorder > 0 && b.stock <= b.reorder;
+            return (
+              <li
+                key={b.id}
+                className={`rounded-2xl bg-paper-100 p-4 ring-1 ${
+                  low ? "ring-brand-700/40" : "ring-ink-950/10"
+                }`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <p className="min-w-0 font-bold text-ink-950">{b.name}</p>
+                  <p className="shrink-0 text-sm tabular-nums text-ink-900/70">
+                    <strong
+                      className={`font-display text-base ${
+                        low ? "text-brand-700" : "text-ink-950"
+                      }`}
+                    >
+                      {b.stock.toLocaleString(brand.locale)}
+                    </strong>{" "}
+                    {b.yieldUnit} made
+                  </p>
+                </div>
+
+                <div className="mt-2.5">
+                  <StockBar stock={b.stock} reorder={b.reorder} />
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-900/50">
+                  <span>
+                    Makes {b.yieldQty.toLocaleString(brand.locale)} {b.yieldUnit}
+                    {b.lineCount > 0 && ` from ${b.lineCount} materials`}
+                  </span>
+                  {canSeeCosts && !b.unknown && (
+                    <>
+                      <span>{money(b.total)} a production_run</span>
+                      <span>{money(b.perUnit, 4)} / {b.yieldUnit}</span>
+                    </>
+                  )}
+                  {canSeeCosts && b.unknown && (
+                    <span className="font-bold text-warn-700">Not costed</span>
+                  )}
+                  {low && (
+                    <span className="rounded-full bg-brand-700 px-2 py-0.5 font-black uppercase tracking-wide text-paper-50">
+                      Make more
+                    </span>
+                  )}
+                </div>
+
+                {canSeeCosts && b.problems.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-0.5">
+                    {b.problems.map((p) => (
+                      <li key={p} className="text-[11px] font-semibold text-warn-700">
+                        ⚠ {p}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {canManage && (
+                <div className="mt-3 flex gap-1.5">
+                  <button
+                    onClick={() => setEditing({ kind: "produce", production_run: b })}
+                    className={`flex-1 rounded-xl py-2 text-xs font-black uppercase tracking-wide transition-colors ${
+                      low
+                        ? "bg-ok-600 text-paper-50 hover:bg-ok-700"
+                        : "bg-ok-600/10 text-ok-800 hover:bg-ok-600 hover:text-paper-50"
+                    }`}
+                  >
+                    Make a production_run
+                  </button>
+                  {/* Recipes define what things cost, so they are the owner's.
+                      Making a production_run is something that happened, so it is the
+                      shift's. */}
+                  {canSeeCosts && (
+                    <button
+                      onClick={() => setEditing({ kind: "recipe", production_run: b })}
+                      className="rounded-xl bg-ink-950/5 px-3 py-2 text-xs font-bold text-ink-900/70 transition-colors hover:bg-ink-950/10"
+                    >
+                      Recipe
+                    </button>
+                  )}
+                </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Keyed on the row so opening a second material's form resets every
+          field — a restock dialog carrying the last one's quantity is how a
+          delivery gets recorded against the wrong shelf. */}
+      {editing?.kind === "waste" && (
+        <WasteForm
+          options={[
+            ...ingredientOptions,
+            ...production_runs.map((b) => ({
+              id: b.id,
+              name: b.name,
+              unit: b.yieldUnit,
+              unitCost: b.perUnit,
+              kind: "production_run" as const,
+              stock: b.stock,
+            })),
+          ]}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {editing?.kind === "new" && (
+        <IngredientForm
+          units={units}
+          categories={allCategories}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {editing?.kind === "edit" && (
+        <IngredientForm
+          key={editing.row.id}
+          material={editable(editing.row)}
+          units={units}
+          categories={allCategories}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {editing?.kind === "restock" && (
+        <RestockForm
+          key={editing.row.id}
+          material={editable(editing.row)}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {editing?.kind === "count" && (
+        <CountForm
+          key={editing.row.id}
+          material={editable(editing.row)}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {editing?.kind === "produce" && (
+        <ProduceBatchForm
+          key={editing.production_run.id}
+          production_run={{
+            id: editing.production_run.id,
+            name: editing.production_run.name,
+            yieldQty: editing.production_run.yieldQty,
+            yieldUnit: editing.production_run.yieldUnit,
+            stock: editing.production_run.stock,
+          }}
+          recipe={editing.production_run.recipe}
+          options={ingredientOptions}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {editing?.kind === "recipe" && (
+        <RecipeEditor
+          key={editing.production_run.id}
+          title={`Recipe for ${editing.production_run.name}`}
+          subtitle={`Makes ${editing.production_run.yieldQty.toLocaleString(brand.locale)} ${editing.production_run.yieldUnit} a production_run.`}
+          price={null}
+          options={ingredientOptions}
+          initial={editing.production_run.recipe.map((r) => ({
+            refType: "inv" as const,
+            refId: r.materialId,
+            qty: r.qty,
+          }))}
+          target={{ kind: "production_run", productionRunId: editing.production_run.id }}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </div>
+  );
+}

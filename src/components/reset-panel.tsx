@@ -1,0 +1,207 @@
+"use client";
+import { brand } from "../../config/index.ts";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  resetShopData,
+  type ResetCounts,
+  type ResetScope,
+} from "@/app/admin/reset/actions";
+
+/**
+ * The most destructive control in the system, built to feel like it.
+ *
+ * Three deliberate obstacles, each stopping a different mistake: choosing what
+ * goes (so nothing is deleted by surprise), typing RESET (so a mis-tap can't),
+ * and the password (so a tablet left signed in on the counter can't). None of
+ * them is friction for its own sake — each one is the answer to a way this
+ * could ruin an afternoon.
+ */
+export function ResetPanel({ counts }: { counts: ResetCounts }) {
+  const router = useRouter();
+  const [scope, setScope] = useState<ResetScope>({
+    // Nothing destructive is pre-ticked any more. The narrow option is the
+    // one most likely to be wanted, and it's the one that can't cost the shop
+    // a real customer's history.
+    orders: false,
+    menu: false,
+    chat: false,
+    staffOrders: true,
+    inventory: false,
+    money: false,
+  });
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string[] | null>(null);
+
+  const ITEMS: {
+    key: keyof ResetScope;
+    label: string;
+    detail: string;
+    count: number;
+  }[] = [
+    {
+      key: "staffOrders",
+      label: "Your own test orders",
+      detail:
+        "Orders placed from an owner or staff account while trying the site out. Real customers' orders are left alone.",
+      count: counts.staffOrders,
+    },
+    {
+      key: "orders",
+      label: "Orders and reviews",
+      detail: "Every order, its items, and the reviews written about them.",
+      count: counts.orders + counts.reviews,
+    },
+    {
+      key: "chat",
+      label: "Chat and taught answers",
+      detail: `Ask ${brand.name} threads, and the answers you taught it.`,
+      count: counts.chats,
+    },
+    {
+      key: "menu",
+      label: "The whole menu",
+      detail: "Every product, so you can type the real menu from scratch.",
+      count: counts.products,
+    },
+    {
+      key: "inventory",
+      label: "Inventory, production_runs and recipes",
+      detail:
+        "Every material and its stock lots, every production_run, and the recipes built on them \u2014 plus the purchase, consumption and waste records that describe them. Products stay; they are left with no recipe.",
+      count: counts.materials + counts.production_runs,
+    },
+    {
+      key: "money",
+      label: "Money records",
+      detail:
+        "The cash ledger, monthly bills, assets and utang. Your payment settings and GCash details are not touched.",
+      count: counts.cashEntries,
+    },
+  ];
+
+  const chose = ITEMS.some((i) => scope[i.key]);
+  const ready = chose && password.length > 0 && confirmation.trim().toUpperCase() === "RESET";
+
+  async function run() {
+    setBusy(true);
+    setError(null);
+    const res = await resetShopData({ password, confirmation, scope });
+    if (!res.ok) {
+      setError(res.error);
+      setBusy(false);
+      return;
+    }
+    setDone(res.deleted);
+    setPassword("");
+    setConfirmation("");
+    setBusy(false);
+    router.refresh();
+  }
+
+  if (done) {
+    return (
+      <div className="rounded-3xl bg-ok-50 p-6 ring-2 ring-ok-600/40">
+        <p className="font-display text-xl font-black text-ok-700">
+          Cleared. You&apos;re starting fresh.
+        </p>
+        <ul className="mt-3 flex flex-col gap-1 text-sm text-ink-900/70">
+          {done.map((line) => (
+            <li key={line}>· {line}</li>
+          ))}
+        </ul>
+        <p className="mt-4 text-sm text-ink-900/60">
+          Your hours, delivery, payment details and every account were left
+          exactly as they were.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-3xl bg-paper-100 p-6 ring-2 ring-brand-700/40">
+      <p className="text-xs font-bold uppercase tracking-widest text-brand-800">
+        Step 1 · What goes
+      </p>
+      <ul className="mt-3 flex flex-col gap-2">
+        {ITEMS.map((item) => (
+          <li key={item.key}>
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-paper-50 p-4 ring-1 ring-ink-950/10">
+              <input
+                type="checkbox"
+                checked={scope[item.key]}
+                onChange={(e) =>
+                  setScope((s) => ({ ...s, [item.key]: e.target.checked }))
+                }
+                className="mt-0.5 h-5 w-5 shrink-0 accent-brand-700"
+              />
+              <span className="min-w-0">
+                <span className="block font-bold text-ink-950">
+                  {item.label}{" "}
+                  <span className="font-normal text-ink-900/50">
+                    · {item.count} row{item.count === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <span className="block text-sm text-ink-900/60">{item.detail}</span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-6 text-xs font-bold uppercase tracking-widest text-brand-800">
+        Step 2 · Prove it&apos;s you
+      </p>
+      <div className="mt-3 flex flex-col gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-ink-950">
+            Your password
+          </span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            placeholder="••••••••"
+            className="rounded-xl bg-paper-50 px-4 py-3 ring-1 ring-ink-950/15 outline-none focus:ring-2 focus:ring-brand-700"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-ink-950">
+            Type <strong className="font-mono">RESET</strong> to confirm
+          </span>
+          <input
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+            placeholder="RESET"
+            className="rounded-xl bg-paper-50 px-4 py-3 font-mono uppercase tracking-widest ring-1 ring-ink-950/15 outline-none focus:ring-2 focus:ring-brand-700"
+          />
+        </label>
+      </div>
+
+      {error && (
+        <p className="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-800">
+          {error}
+        </p>
+      )}
+
+      <button
+        onClick={run}
+        disabled={!ready || busy}
+        className="mt-6 w-full rounded-full bg-brand-700 px-6 py-4 font-black text-paper-50 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+      >
+        {busy ? "Clearing…" : "Clear the data I ticked"}
+      </button>
+
+      <p className="mt-3 text-center text-xs text-ink-900/50">
+        There is no undo. Nothing here touches your hours, delivery, payment
+        details, saved devices or any account.
+      </p>
+    </div>
+  );
+}

@@ -3,7 +3,7 @@
  *
  * Until now this system had two kinds of person — "staff" and "owner" — and
  * `isStaff()` was the gate on almost everything. That gate is far wider than
- * it reads: a member of staff could change any price, see every ingredient's
+ * it reads: a member of staff could change any price, see every material's
  * purchase cost, edit the cash ledger and read the month's takings. For a
  * stall where the counter is worked by whoever is free that day, that is the
  * whole business handed over with the till.
@@ -35,7 +35,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const ROLE_BLURBS: Record<Role, string> = {
   owner: "Everything. Prices, money, the books, and who works here.",
   manager:
-    "Runs a service without seeing the books. Can restock, cook batches, log waste, mark a dish sold out and post promos — but not change a price or see what anything earns.",
+    "Runs a service without seeing the books. Can restock, cook production_runs, log waste, mark a product sold out and post promos — but not change a price or see what anything earns.",
   staff:
     "The counter and the orders. Sees what stock is left and can log waste. No prices, no costs, no takings.",
   customer: "Not shop staff — an ordinary customer account.",
@@ -46,7 +46,7 @@ export const ROLE_BLURBS: Record<Role, string> = {
  *
  * Deliberately in the shop's language rather than the schema's: the question
  * an owner asks is "can they restock", not "can they insert into
- * ingredient_lots". Where one verb covers several tables that is a decision,
+ * material_lots". Where one verb covers several tables that is a decision,
  * not an oversight — they rise and fall together.
  */
 export const CAPABILITIES = [
@@ -61,15 +61,15 @@ export const CAPABILITIES = [
   /** Write off something that was thrown away. */
   "waste",
   /**
-   * Restock, cycle-count, cook a batch, edit a recipe.
+   * Restock, cycle-count, cook a production_run, edit a recipe.
    *
-   * Carries ingredient purchase prices with it, necessarily: you cannot
+   * Carries material purchase prices with it, necessarily: you cannot
    * record a delivery without saying what it cost, and the forms pre-fill
    * from those numbers. This is not the same as seeing the margin — that is
    * `costs`, and it stays the owner's.
    */
   "stock.manage",
-  /** Mark a dish sold out or back on, without touching what it is or costs. */
+  /** Mark a product sold out or back on, without touching what it is or costs. */
   "menu.availability",
   /**
    * Write the promos and news the customers see on the homepage.
@@ -100,7 +100,7 @@ export const CAPABILITIES = [
    * the line if it is ever abused.
    */
   "reviews.relay",
-  /** Add a dish, change its name, price, photo or description. */
+  /** Add a product, change its name, price, photo or description. */
   "menu.edit",
   /** What each DISH costs and earns — the margin. The owner's alone. */
   "costs",
@@ -115,8 +115,8 @@ export const CAPABILITIES = [
    * behind any figure.
    *
    * Owner only, and not because the explanations are secret. To show how net
-   * profit was arrived at it has to read net profit, and to explain a dish's
-   * margin it has to read what the dish costs. Handing that to a manager
+   * profit was arrived at it has to read net profit, and to explain a product's
+   * margin it has to read what the product costs. Handing that to a manager
    * would hand them the books through the back door, which is exactly what
    * the manager role exists to avoid.
    */

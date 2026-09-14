@@ -70,7 +70,7 @@ export const KIND_BLURB: Record<AnnouncementKind, string> = {
   promo:
     "Short and loud. Scrolls across the top of the homepage and shows as a card. Best under about five words.",
   news:
-    "Dated and informational — a closure, a new dish, a change of hours. Shows as a list, newest first, and each one opens to its own page.",
+    "Dated and informational — a closure, a new product, a change of hours. Shows as a list, newest first, and each one opens to its own page.",
   dine_in:
     "The big line in the gold band. What somebody eating at the stall gets that a take-out order doesn't. Only the first one that's on is shown.",
   coming_soon:

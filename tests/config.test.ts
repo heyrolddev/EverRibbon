@@ -39,7 +39,9 @@ test("brandVars emits every palette key as a custom property", () => {
   // Plus the two the stylesheet cannot resolve on its own.
   assert.ok(css.includes("--accent-fill:"));
   assert.ok(css.includes("--on-accent:"));
-  assert.ok(css.includes("--font-display:"));
+  assert.ok(css.includes("--font-display-stack:"));
+  assert.ok(css.includes("--font-body-stack:"));
+  assert.ok(css.includes("--font-mono-stack:"));
 });
 
 test("two brands produce different CSS from the same code path", () => {

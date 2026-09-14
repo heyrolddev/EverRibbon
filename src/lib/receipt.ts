@@ -103,7 +103,7 @@ function row(label: string, value: string, cols: number): string {
   return cut + " ".repeat(Math.max(1, gap - cut.length)) + value;
 }
 
-/** Wrap a long dish name rather than cutting it. Nobody ordered "Black Pep". */
+/** Wrap a long product name rather than cutting it. Nobody ordered "Black Pep". */
 function wrap(text: string, cols: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   const out: string[] = [];

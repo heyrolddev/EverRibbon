@@ -1,7 +1,7 @@
 /**
  * Colours for the kinds of food this shop sells.
  *
- * A category used to be a string typed into one box on one dish, which meant
+ * A category used to be a string typed into one box on one product, which meant
  * "Chicken", "chicken" and "Chicken " were three categories, and the filter
  * bar on the customer menu showed all three. Now they are rows in a table, and
  * a row can carry a colour.
@@ -37,9 +37,9 @@ export type CategoryTone = {
 export const CATEGORY_TONES: Record<string, CategoryTone> = {
   brand: {
     label: "Red",
-    chip: "bg-brand-700 text-paper-50",
-    soft: "bg-brand-700/10 text-brand-800",
-    dot: "bg-brand-700",
+    chip: "bg-brand-800 text-paper-50",
+    soft: "bg-brand-800/10 text-brand-900",
+    dot: "bg-brand-800",
   },
   chili: {
     label: "Orange",
@@ -51,7 +51,7 @@ export const CATEGORY_TONES: Record<string, CategoryTone> = {
     // Gold is the one that cannot take cream text — it's a light colour, and
     // the chip needs ink on it or the label vanishes.
     label: "Yellow",
-    chip: "bg-brand-700 text-paper-50",
+    chip: "bg-brand-800 text-paper-50",
     soft: "bg-accent-200/25 text-ink-950",
     dot: "bg-accent-200",
   },
@@ -75,14 +75,14 @@ export const CATEGORY_TONES: Record<string, CategoryTone> = {
   },
   brown: {
     label: "Brown",
-    chip: "bg-ink-900 text-paper-50",
-    soft: "bg-ink-900/12 text-ink-900",
-    dot: "bg-ink-900",
+    chip: "bg-ink-950 text-paper-50",
+    soft: "bg-ink-950/12 text-ink-950",
+    dot: "bg-ink-950",
   },
   sand: {
     label: "Sand",
     chip: "bg-paper-300 text-ink-950",
-    soft: "bg-paper-200 text-ink-900",
+    soft: "bg-paper-200 text-ink-950",
     dot: "bg-paper-300",
   },
 };
@@ -131,20 +131,20 @@ export function colourOf(
   return toneFor(stored ?? fallbackColour(name));
 }
 
-/** What a dish's category is, with the same fallback everywhere. */
+/** What a product's category is, with the same fallback everywhere. */
 export function categoryOf(categories: string[] | null | undefined): string {
   return categories?.[0]?.trim() || "Menu";
 }
 
 /**
- * Tidy the list a dish is saved with.
+ * Tidy the list a product is saved with.
  *
  * Trims, drops blanks, and removes case-insensitive duplicates while keeping
- * the first spelling — so a dish tagged "Chicken" and "chicken" ends up with
+ * the first spelling — so a product tagged "Chicken" and "chicken" ends up with
  * one category rather than two that look identical on the customer's filter
  * bar and behave as separate things.
  *
- * Order survives, because the first one leads: it is what the dish reads as
+ * Order survives, because the first one leads: it is what the product reads as
  * anywhere there is only room for one.
  */
 export function cleanCategories(input: string[] | undefined): string[] {
@@ -159,21 +159,21 @@ export function cleanCategories(input: string[] | undefined): string[] {
 }
 
 /**
- * A dish, as far as its categories are concerned.
+ * A product, as far as its categories are concerned.
  *
- * Every screen that groups dishes reads this shape and nothing more, so the
+ * Every screen that groups products reads this shape and nothing more, so the
  * three rules below can be shared without any of them depending on which
  * screen is asking.
  */
 export type Categorised = { categories: string[] | null | undefined };
 
 /**
- * Is this dish in that category?
+ * Is this product in that category?
  *
  * ANY of its categories, not just the first. `categoryOf` returns the first
- * one — the "main" that decides the dish's colour — and using that to answer
+ * one — the "main" that decides the product's colour — and using that to answer
  * this question is the bug these three functions exist to stop coming back.
- * A dish tagged Mains and Ji Wings is in Ji Wings; a filter that says
+ * A product tagged Mains and Ji Wings is in Ji Wings; a filter that says
  * otherwise is a pill that shows nothing.
  */
 export function inCategory(item: Categorised, name: string): boolean {
@@ -183,10 +183,10 @@ export function inCategory(item: Categorised, name: string): boolean {
 /**
  * Every category actually in use, in the shop's own order first.
  *
- * The dishes decide WHICH categories exist; `known` — the `menu_categories`
+ * The products decide WHICH categories exist; `known` — the `catalog_categories`
  * table — only decides what order they come in. That way a menu imported from
  * somewhere with no vocabulary rows still gets its filters, and a category
- * with a row but no dish never becomes a pill that shows nothing.
+ * with a row but no product never becomes a pill that shows nothing.
  */
 export function categoriesUsed(
   items: Categorised[],
@@ -205,7 +205,7 @@ export function categoriesUsed(
 }
 
 /**
- * Where a dish sits in the menu's running order.
+ * Where a product sits in the menu's running order.
  *
  * The EARLIEST block it belongs to, across all of its categories — not the
  * block its first category names. That distinction is what makes this
@@ -215,11 +215,11 @@ export function categoriesUsed(
  * "Soft drinks". If the order put "Drinks" near the front, every drink in the
  * shop would collapse into one early block and the careful Coffee → Milktea →
  * Raspberry → Soft drinks sequence would never appear. With "Drinks" placed
- * last, the same rule reads the specific category instead, and a dish tagged
+ * last, the same rule reads the specific category instead, and a product tagged
  * only "Drinks" still lands at the end where it belongs.
  *
  * So the owner controls the whole layout by dragging one chip, rather than by
- * re-tagging thirty dishes. Anything in no known category sorts last.
+ * re-tagging thirty products. Anything in no known category sorts last.
  */
 export function menuRank(item: Categorised, order: Map<string, number>): number {
   let best = Number.MAX_SAFE_INTEGER;
@@ -231,14 +231,14 @@ export function menuRank(item: Categorised, order: Map<string, number>): number 
 }
 
 /**
- * The dishes, in the order the shop put its categories in.
+ * The products, in the order the shop put its categories in.
  *
  * "All" used to be alphabetical by name, which is why a menu of Taiwanese
  * food opened on three two-litre bottles of soft drink: the names start with
  * digits, and digits sort before letters. Nobody chose that order — it was
  * the database's `order by name` showing through.
  *
- * Takes the ordered category list rather than the raw `menu_categories` rows,
+ * Takes the ordered category list rather than the raw `catalog_categories` rows,
  * so the grid and the filter pills above it are literally reading the same
  * array. Two lists that are meant to agree and are computed separately are
  * two lists that will eventually disagree.
@@ -261,12 +261,12 @@ export function orderForMenu<T extends Categorised & { name: string }>(
 }
 
 /**
- * How many dishes are in each category.
+ * How many products are in each category.
  *
- * A dish in two categories counts in both, so these deliberately sum to more
- * than the number of dishes. That is the honest answer to what a chip asks —
- * "how many dishes are in here" — and the alternative, counting each dish
- * once under its first category, is what made a category holding a dish
+ * A product in two categories counts in both, so these deliberately sum to more
+ * than the number of products. That is the honest answer to what a chip asks —
+ * "how many products are in here" — and the alternative, counting each product
+ * once under its first category, is what made a category holding a product
  * display as zero.
  */
 export function countByCategory(items: Categorised[]): Record<string, number> {

@@ -1,0 +1,544 @@
+"use client";
+import { formatDateTimeFull, money } from "@/lib/format";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ticketOf } from "@/lib/tickets";
+import { alertEtaElapsed } from "@/app/admin/orders/actions";
+import { OrderStatusPicker } from "@/components/order-status-picker";
+import { EtaPicker } from "@/components/eta-picker";
+import { AdminSearch } from "@/components/admin-search";
+import { searchAllOrders } from "@/app/admin/orders/actions";
+import { PaymentVerifier } from "@/components/payment-verifier";
+import { ACTIVE_ORDER_STATUSES, STATUS_LABELS, STATUS_TONES, ORDER_STATUSES, type OrderStatus, fulfillmentLabel } from "@/lib/orders";
+import { OrderBoard, type View } from "@/components/order-board";
+import { Foldable } from "@/components/foldable";
+import { moneyLine, moneyState, type PaymentMethod, type PaymentPlan, type PaymentStatus } from "@/lib/payments";
+import { EtaCountdown } from "@/components/eta-countdown";
+
+export type AdminOrder = {
+  id: string;
+  created_at: string;
+  scheduled_for: string | null;
+  status: OrderStatus;
+  fulfillment: string;
+  revenue: number;
+  eta_minutes: number | null;
+  cancelled_reason: string | null;
+  cancelled_at: string | null;
+  /** Who cancelled it — resolved on the server, since staff names are not in this list. */
+  cancelled_by_name: string | null;
+  ticket: number | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  notes: string | null;
+  customer_id: string | null;
+  delivery_address: string | null;
+  delivery_lat: number | null;
+  delivery_lng: number | null;
+  delivery_distance_km: number | null;
+  delivery_fee: number;
+  payment_method: PaymentMethod;
+  payment_status: PaymentStatus;
+  payment_reference: string | null;
+  payment_receipt_url: string | null;
+  eta_set_at: string | null;
+  payment_plan: PaymentPlan;
+  downpayment_amount: number;
+  downpayment_confirmed_at: string | null;
+  lines: { qty: number; price: number; name: string }[];
+  customer: {
+    full_name: string | null;
+    phone: string | null;
+    is_verified: boolean;
+    is_blocked: boolean;
+  } | null;
+  completedBefore: number;
+};
+
+
+function OrderCard({ order: o }: { order: AdminOrder }) {
+  const p = o.customer;
+  const payment = moneyState(o);
+  return (
+    <div className="bg-paper-100 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status first, in the queue's own colour. The picker on the
+                right says what you can change it to; this says what it is,
+                where the eye already starts. Scanning twenty orders should
+                not mean reading twenty dropdowns. */}
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide ${
+                STATUS_TONES[o.status].chip
+              }`}
+            >
+              {STATUS_LABELS[o.status]}
+            </span>
+            {/* The ticket first. It is what the receipt says, what the
+                activity log points at and what somebody types into the search
+                box — so it belongs where the eye lands, not buried. */}
+            <span className="font-display text-lg font-black tabular-nums text-ink-900/45">
+              {ticketOf(o.ticket)}
+            </span>
+            <span className="font-display text-lg font-bold text-ink-950">
+              {o.contact_name || p?.full_name || "No name"}
+            </span>
+            {/* The confirmation when completing is a moment and it can be
+                clicked through. This stays until the money is settled, which
+                is what actually gets it chased. */}
+            {o.status === "completed" && payment.balance > 0 && (
+              <span className="rounded-full bg-brand-700 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-paper-50">
+                ⚠ {money(payment.balance)} unpaid
+              </span>
+            )}
+            {!o.customer_id && (
+              <span className="rounded-full bg-ink-900 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-paper-100">
+                Walk-in
+              </span>
+            )}
+            {p?.is_verified && (
+              <span className="rounded-full bg-ok-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-paper-50">
+                ✓ Verified
+              </span>
+            )}
+            {p?.is_blocked && (
+              <span className="rounded-full bg-brand-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-paper-50">
+                ⚠ Blocked
+              </span>
+            )}
+            {o.customer_id && !p?.is_verified && !p?.is_blocked && (
+              <span className="rounded-full bg-accent-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-ink-950">
+                New customer
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-ink-900/70">
+            {o.contact_phone || p?.phone || "no number"} ·{" "}
+            {fulfillmentLabel(o.fulfillment)} ·{" "}
+            {formatDateTimeFull(o.created_at)}
+          </p>
+
+          {/* An advance order that looks like a normal one gets cooked
+              immediately, so this is stated loudly rather than as a detail. */}
+          {o.scheduled_for && (
+            <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-accent-200 px-3 py-1 text-xs font-black text-ink-950">
+              📅 For {formatDateTimeFull(o.scheduled_for)}
+            </p>
+          )}
+          {o.customer_id && (
+            <p className="text-xs text-ink-900/55">
+              {o.completedBefore} completed order{o.completedBefore === 1 ? "" : "s"} before
+              this list
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <span className="text-right">
+            <span className="block font-display text-xl font-black text-brand-700">
+              {money(payment.total)}
+            </span>
+            {/* The total alone doesn't say whether any of it arrived. Unpaid,
+                half-paid and paid in full looked identical here, which is the
+                one distinction the shop is actually keeping track of. */}
+            <span
+              className={`block text-[11px] font-bold ${
+                payment.settled
+                  ? "text-ok-700"
+                  : payment.partPaid
+                    ? "text-warn-700"
+                    : payment.awaitingCheck
+                      ? "text-accent-700"
+                      : "text-ink-900/55"
+              }`}
+            >
+              {moneyLine(payment)}
+            </span>
+            {Number(o.delivery_fee) > 0 && (
+              <span className="block text-[11px] text-ink-900/55">
+                {money(Number(o.revenue))} food + {money(Number(o.delivery_fee))} delivery
+              </span>
+            )}
+          </span>
+          {/* The ETA answers "how long until it's ready", so it retires the
+              moment the answer is "it is". Setting the status to ready clears
+              the stored ETA too — this just stops offering a control that can
+              only produce a wrong promise. */}
+          {!["ready", "out_for_delivery", "completed", "cancelled"].includes(
+            o.status
+          ) && (
+            <span className="flex items-center gap-2">
+              {o.eta_minutes != null && (
+                <EtaCountdown
+                  minutes={o.eta_minutes}
+                  from={o.eta_set_at}
+                  overdueLabel
+                  // The tablet is the timer; this turns it into a buzz on the
+                  // owner's phone, which is where they actually are.
+                  onElapsed={() => void alertEtaElapsed(o.id)}
+                />
+              )}
+              <EtaPicker orderId={o.id} eta={o.eta_minutes} />
+            </span>
+          )}
+          <OrderStatusPicker
+            orderId={o.id}
+            status={o.status}
+            fulfillment={o.fulfillment}
+            money={payment}
+          />
+        </div>
+      </div>
+
+      <ul className="mt-4 flex flex-col gap-1 border-t border-ink-950/10 pt-3 text-sm">
+        {o.lines.map((l, i) => (
+          <li key={i} className="flex justify-between gap-4">
+            <span className="text-ink-900">
+              {l.qty} × {l.name}
+            </span>
+            <span className="font-semibold text-ink-950">{money(l.qty * l.price)}</span>
+          </li>
+        ))}
+      </ul>
+
+      <PaymentVerifier
+        orderId={o.id}
+        method={o.payment_method}
+        status={o.payment_status}
+        reference={o.payment_reference}
+        receiptUrl={o.payment_receipt_url}
+        plan={o.payment_plan}
+        total={Number(o.revenue) + Number(o.delivery_fee)}
+        downpayment={Number(o.downpayment_amount)}
+        downpaymentConfirmedAt={o.downpayment_confirmed_at}
+      />
+
+      {o.fulfillment === "delivery" && o.delivery_address && (
+        <div className="mt-3 rounded-xl bg-accent-50 px-4 py-3 text-sm ring-1 ring-accent-200/40">
+          <p className="font-bold text-ink-950">
+            🛵 Deliver to
+            {o.delivery_distance_km != null && (
+              <span className="ml-2 font-normal text-ink-900/70">
+                ~{Number(o.delivery_distance_km)} km away
+              </span>
+            )}
+          </p>
+          <p className="mt-1 text-ink-900">{o.delivery_address}</p>
+          {o.delivery_lat != null && o.delivery_lng != null && (
+            <a
+              href={`https://www.openstreetmap.org/?mlat=${o.delivery_lat}&mlon=${o.delivery_lng}#map=17/${o.delivery_lat}/${o.delivery_lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block font-bold text-brand-700 hover:underline"
+            >
+              Open the pin in a map ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      {o.notes && (
+        <p className="mt-3 rounded-xl bg-paper-50 px-4 py-3 text-sm text-ink-900">
+          <span className="font-bold">Notes:</span> {o.notes}
+        </p>
+      )}
+
+      {o.status === "cancelled" && (o.cancelled_reason || o.cancelled_by_name) && (
+        <p className="mt-3 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+          <span className="font-bold">Cancelled</span>
+          {o.cancelled_by_name ? ` by ${o.cancelled_by_name}` : ""}
+          {o.cancelled_at ? ` · ${formatDateTimeFull(o.cancelled_at)}` : ""}
+          {o.cancelled_reason ? ` — ${o.cancelled_reason}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Every order, folded to one line until you want it.
+ *
+ * This started as a fix for Completed, which grows forever — but a lunch rush
+ * has the same problem for a different reason. Eight open orders is eight full
+ * cards of controls, and finding the one a customer is ringing about means
+ * scrolling past seven you aren't dealing with. The line carries what you scan
+ * for (who, what state, how much, whether it's late); the card carries what
+ * you act on.
+ *
+ * Every queue starts folded, including the live ones. Open cards were the
+ * default during service on the theory that the controls are the point — but
+ * eight open orders is eight tall cards, and the thing a rush actually needs
+ * is to see the whole queue at once and then reach into one. Scanning is the
+ * common case; acting is the deliberate one, and it costs a tap.
+ */
+function OrderRow({ order: o }: { order: AdminOrder }) {
+  const payment = moneyState(o);
+  const owed = payment.balance > 0;
+  const tone = STATUS_TONES[o.status];
+  const who = o.contact_name || o.customer?.full_name || ticketOf(o.ticket);
+
+  return (
+    <Foldable
+      chip={tone.chip}
+      rail={tone.rail}
+      title={STATUS_LABELS[o.status]}
+      folded={
+        <>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${tone.chip}`}
+          >
+            {STATUS_LABELS[o.status]}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-950">
+            {who}
+          </span>
+          {/* Two things survive the fold, because they're the two reasons to
+              open a row: it's late, or it hasn't been paid for. */}
+          {o.eta_minutes != null && tone.live && (
+            <EtaCountdown
+              minutes={o.eta_minutes}
+              from={o.eta_set_at}
+              overdueLabel
+              className="hidden shrink-0 scale-90 sm:inline-flex"
+            />
+          )}
+          {owed && (
+            <span className="shrink-0 rounded-full bg-brand-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-paper-50">
+              ⚠ {money(payment.balance)}
+            </span>
+          )}
+          <span className="hidden shrink-0 text-xs text-ink-900/50 md:block">
+            {formatDateTimeFull(o.created_at)}
+          </span>
+          <span className="shrink-0 font-display text-sm font-black tabular-nums text-ink-950">
+            {money(payment.total)}
+          </span>
+        </>
+      }
+    >
+      <OrderCard order={o} />
+    </Foldable>
+  );
+}
+
+export function AdminOrderList({
+  orders,
+  loaded,
+  total,
+}: {
+  orders: AdminOrder[];
+  /** How many the board asked for. */
+  loaded: number;
+  /** How many exist. The difference is the whole reason for the archive. */
+  total: number;
+}) {
+  /**
+   * The archive, for when the board's slice does not contain the answer.
+   *
+   * The board loads the newest few hundred, which is right — nobody wants two
+   * years of orders rendered to find today's. But the search box only ever
+   * searched what was loaded, so a ticket from last month came back empty.
+   * That does not read as "out of range", it reads as data loss.
+   *
+   * So when the local filter finds nothing, this asks the database. Automatic
+   * rather than behind a button, because a button is a thing to discover and
+   * the person typing a ticket number has already told us what they want.
+   */
+  const [archive, setArchive] = useState<{
+    for: string;
+    rows: AdminOrder[] | null;
+  } | null>(null);
+  // "Open" is the working view during service; the per-status tabs answer a
+  // specific question. Kept here rather than in the URL because it's a glance,
+  // not a destination — nobody bookmarks "the cancelled ones".
+  const [view, setView] = useState<View>("open");
+
+  // Everything a shop would plausibly type into the box: who ordered, their
+  // number, what they ordered, the status, and the short order id.
+  const searchText = useCallback(
+    (o: AdminOrder) =>
+      [
+        o.contact_name,
+        o.customer?.full_name,
+        o.contact_phone,
+        o.customer?.phone,
+        o.status,
+        o.fulfillment,
+        o.notes,
+        o.delivery_address,
+        o.payment_method,
+        o.payment_status,
+        o.payment_reference,
+        ticketOf(o.ticket),
+        String(o.ticket ?? ""),
+        o.id.slice(0, 8),
+        ...o.lines.map((l) => l.name),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    []
+  );
+
+  return (
+    <AdminSearch
+      rows={orders}
+      searchText={searchText}
+      noun="order"
+      placeholder="Search ticket, name, number, item, status…"
+    >
+      {(filtered, query) => {
+        const q = query.trim();
+        const localMiss = q.length >= 2 && filtered.length === 0;
+        // Counts come from what the search left behind, not from every order
+        // in the shop. A tab that says 40 and then shows 2 is a tab lying
+        // about what clicking it does.
+        const counts = { open: 0 } as Record<View, number>;
+        for (const st of ORDER_STATUSES) counts[st] = 0;
+        for (const o of filtered) {
+          counts[o.status] += 1;
+          if (ACTIVE_ORDER_STATUSES.includes(o.status)) counts.open += 1;
+        }
+
+        const shown =
+          view === "open"
+            ? filtered.filter((o) => ACTIVE_ORDER_STATUSES.includes(o.status))
+            : filtered.filter((o) => o.status === view);
+
+        if (localMiss) {
+          return (
+            <ArchiveResults
+              query={q}
+              archive={archive}
+              onLoad={setArchive}
+              total={total}
+              loaded={loaded}
+            />
+          );
+        }
+
+        return (
+          <div className="flex flex-col gap-5">
+            <OrderBoard view={view} onView={setView} counts={counts} />
+
+            {/* A list that silently stops is a list somebody eventually
+                mistakes for the whole thing. Search reaches the rest. */}
+            {total > loaded && (
+              <p className="text-xs text-ink-900/50">
+                Showing the newest{" "}
+                <span className="tabular-nums">{loaded.toLocaleString()}</span> of{" "}
+                <span className="tabular-nums">{total.toLocaleString()}</span> orders.
+                Search reaches all of them.
+              </p>
+            )}
+
+            {shown.length === 0 ? (
+              <p className="rounded-2xl border-2 border-dashed border-brand-300 bg-paper-100 p-6 text-sm text-ink-900/70">
+                {/* With a search box above, "nothing is preparing right now"
+                    is a lie — plenty might be, just nothing matching what was
+                    typed. Say which of the two it is. */}
+                {query.trim()
+                  ? `Nothing in this queue matches \u201C${query.trim()}\u201D.`
+                  : view === "open"
+                    ? "Nothing waiting — you're all caught up. \u{1F389}"
+                    : `No orders are ${STATUS_LABELS[view].toLowerCase()} right now.`}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {shown.map((o) => (
+                  <OrderRow key={o.id} order={o} />
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      }}
+    </AdminSearch>
+  );
+}
+
+/**
+ * What the archive found, or that it is looking.
+ *
+ * Split out so the board above stays a rendering function and this can hold
+ * the request. It fires once per query — the guard is the query string itself,
+ * so typing one more character asks again and backspacing does not.
+ */
+function ArchiveResults({
+  query,
+  archive,
+  onLoad,
+  total,
+  loaded,
+}: {
+  query: string;
+  archive: { for: string; rows: AdminOrder[] | null } | null;
+  onLoad: (a: { for: string; rows: AdminOrder[] | null }) => void;
+  total: number;
+  loaded: number;
+}) {
+  const asked = useRef<string | null>(null);
+
+  /**
+   * One request per query, and the query string is what matches a result to
+   * the box.
+   *
+   * Written this way after getting it wrong once. The first version set a
+   * "looking…" state before awaiting, and kept `archive.for` in the
+   * dependencies — so that state change re-ran the effect, React cleaned up
+   * the previous one, the cleanup flipped an `alive` flag, and the reply that
+   * was already in flight was then thrown away on arrival. It sat on
+   * "looking…" for ever.
+   *
+   * So: the effect depends on the query alone, nothing sets an intermediate
+   * state, and "looking" is derived from whether the stored result is for the
+   * query currently in the box. A reply that arrives for an older query is
+   * ignored by the same comparison rather than by a flag.
+   */
+  useEffect(() => {
+    if (asked.current === query) return;
+    // Debounced, because this runs on a miss and every keystroke on the way to
+    // a ticket number is a miss.
+    const t = setTimeout(async () => {
+      asked.current = query;
+      onLoad({ for: query, rows: await searchAllOrders(query) });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [query, onLoad]);
+
+  const rows = archive?.for === query ? archive.rows : null;
+  const looking = rows === null;
+
+  if (looking) {
+    return (
+      <p className="rounded-2xl border-2 border-dashed border-ink-950/15 bg-paper-100 p-6 text-sm text-ink-900/60">
+        Not in the newest {loaded.toLocaleString()} — looking through all{" "}
+        {total.toLocaleString()}…
+      </p>
+    );
+  }
+
+  if (!rows || rows.length === 0) {
+    return (
+      <p className="rounded-2xl border-2 border-dashed border-brand-300 bg-paper-100 p-6 text-sm text-ink-900/70">
+        Nothing in the whole history matches &ldquo;{query}&rdquo; — not just
+        the newest {loaded.toLocaleString()}. Tickets look like{" "}
+        <span className="font-mono">0042</span>.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="rounded-2xl bg-accent-200/20 px-4 py-3 text-sm text-ink-900/75">
+        <span className="font-bold text-ink-950">
+          {rows.length} from the archive
+        </span>{" "}
+        — older than the newest {loaded.toLocaleString()} on the board.
+      </p>
+      {rows.map((o) => (
+        <OrderRow key={o.id} order={o} />
+      ))}
+    </div>
+  );
+}

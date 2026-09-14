@@ -7,7 +7,7 @@ import {
 } from "../src/lib/orders.ts";
 
 /**
- * How many of one dish may go on one line.
+ * How many of one product may go on one line.
  *
  * These exist because `placeOrder` — the only order-writing action the public
  * can reach — checked the price, the delivery fee, the stock, the phone

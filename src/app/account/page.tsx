@@ -1,0 +1,151 @@
+import Link from "next/link";
+import { RoleOffer } from "@/components/role-offer";
+import { getViewer, isConfigured } from "@/lib/auth";
+import { PageHeader } from "@/components/page-header";
+import { AccountForm } from "@/components/account-form";
+import { AvatarField } from "@/components/avatar-field";
+import { getDeliverySettings } from "@/lib/delivery-server";
+import { SignOutButton } from "@/components/sign-out-button";
+import { PushToggle } from "@/components/push-toggle";
+import { pushConfigured } from "@/lib/push";
+
+import { privatePage } from "@/lib/seo";
+
+export const metadata = privatePage("My account");
+
+export default async function AccountPage() {
+  if (!isConfigured()) {
+    return (
+      <main className="flex-1">
+        <PageHeader title="My Account" />
+        <section className="mx-auto max-w-md px-6 py-14">
+          <p className="rounded-3xl border-2 border-dashed border-brand-300 bg-paper-100 p-8 text-center text-ink-900/80">
+            Accounts aren&apos;t set up yet.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  const viewer = await getViewer();
+
+  if (!viewer) {
+    return (
+      <main className="flex-1">
+        <PageHeader
+          eyebrow="Your details"
+          title="My Account"
+          subtitle="Sign in to manage your name, number and delivery address."
+        />
+        <section className="mx-auto max-w-md px-6 py-14 text-center">
+          <Link
+            href="/login?next=/account"
+            className="inline-block rounded-full bg-brand-700 px-8 py-4 font-bold text-paper-50 transition-transform hover:scale-105"
+          >
+            Sign in →
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  const p = viewer.profile;
+  const delivery = await getDeliverySettings();
+
+  return (
+    <main className="flex-1">
+      <PageHeader
+        eyebrow="Your details"
+        title="My Account"
+        subtitle={viewer.email}
+      />
+
+      <section className="mx-auto max-w-md px-6 py-14">
+        {/* Above everything else on the page, including the blocked notice:
+            being offered a job is the most consequential thing that can be
+            waiting here, and it is the only one with a deadline attached to
+            somebody else's plans. */}
+        {p?.pending_role && (
+          <div className="mb-6">
+            <RoleOffer role={p.pending_role} />
+          </div>
+        )}
+
+        {p?.is_blocked && (
+          <div className="mb-6 rounded-2xl bg-brand-700 px-5 py-4 text-sm font-semibold text-paper-50">
+            Ordering is paused on this account. Please contact us at
+            +63 947 353 3060 if you think this is a mistake.
+          </div>
+        )}
+
+        <div
+          className={`mb-6 flex items-center gap-3 rounded-2xl px-5 py-4 text-sm font-semibold ${
+            p?.is_verified
+              ? "bg-ok-700 text-paper-50"
+              : "bg-paper-100 text-ink-900 ring-1 ring-ink-950/10"
+          }`}
+        >
+          <span className="text-lg">{p?.is_verified ? "✓" : "•"}</span>
+          {p?.is_verified ? (
+            <span>Verified customer — thanks for ordering with us!</span>
+          ) : (
+            <span>
+              Not yet verified. Complete your details below and place an
+              order — we verify accounts as we get to know you.
+            </span>
+          )}
+        </div>
+
+        {/* Its own block above the form, not a field inside it. It saves the
+            moment a photo is chosen — a picture you can see is the only
+            confirmation that matters — and a control that saves itself has no
+            business sitting above a Save button that doesn't apply to it. */}
+        <div className="mb-8 border-b border-ink-950/10 pb-8">
+          <AvatarField
+            name={p?.full_name ?? viewer.email}
+            avatarUrl={p?.avatar_url ?? null}
+          />
+        </div>
+
+        <AccountForm
+          shop={{ lat: delivery.shop_lat, lng: delivery.shop_lng }}
+          initial={{
+            fullName: p?.full_name ?? "",
+            phone: p?.phone ?? "",
+            address: p?.address ?? "",
+            lat: p?.address_lat ?? null,
+            lng: p?.address_lng ?? null,
+          }}
+        />
+
+        <div className="mt-8 flex flex-wrap gap-4 text-sm font-semibold">
+          <Link href="/orders" className="text-brand-700 hover:underline">
+            My orders →
+          </Link>
+          <Link href="/menu" className="text-brand-700 hover:underline">
+            Browse the menu →
+          </Link>
+        </div>
+
+        {/* Notifications live here for good. On My orders they're a one-time
+            question; once it's answered either way, it's a setting — and a
+            setting in front of someone checking on their food is clutter. */}
+        {pushConfigured() && (
+          <div className="mt-10">
+            <PushToggle
+              audience="customer"
+              vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null}
+            />
+          </div>
+        )}
+
+        {/* The header drops sign-out on a phone, where it wrapped onto two
+            lines and pushed the row into the logo. It belongs here anyway:
+            this is where the account chip beside it already leads. */}
+        <div className="mt-10 border-t border-ink-950/10 pt-6">
+          <SignOutButton variant="block" />
+        </div>
+      </section>
+    </main>
+  );
+}

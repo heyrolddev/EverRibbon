@@ -11,11 +11,24 @@ import { brand } from "../../config/index.ts";
 
 const { locale, timeZone, currency } = brand;
 
-const decimal = new Intl.NumberFormat(locale, {
-  minimumFractionDigits: currency.decimals,
-  maximumFractionDigits: currency.decimals,
-});
-const whole = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+/*
+ * One formatter per precision, built once.
+ *
+ * Intl.NumberFormat is expensive to construct and these are called in a loop
+ * down a list of orders, so they are cached rather than made per call.
+ */
+const formatters = new Map<number, Intl.NumberFormat>();
+function at(decimals: number): Intl.NumberFormat {
+  let f = formatters.get(decimals);
+  if (!f) {
+    f = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    formatters.set(decimals, f);
+  }
+  return f;
+}
 
 /**
  * `₱1,234.50`, or `-₱1.25` — the sign goes outside the symbol.
@@ -23,15 +36,14 @@ const whole = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
  * `₱-1.25` reads as a currency code followed by a negative number and is the
  * kind of thing a person notices once and distrusts the whole screen for.
  */
-export function money(n: number): string {
+export function money(n: number, decimals: number = currency.decimals): string {
   const v = Number(n) || 0;
-  return (v < 0 ? "-" : "") + currency.symbol + decimal.format(Math.abs(v));
+  return (v < 0 ? "-" : "") + currency.symbol + at(decimals).format(Math.abs(v));
 }
 
 /** Same, without the centavos — for charts and tiles where they are noise. */
 export function moneyRound(n: number): string {
-  const v = Number(n) || 0;
-  return (v < 0 ? "-" : "") + currency.symbol + whole.format(Math.abs(Math.round(v)));
+  return money(Math.round(Number(n) || 0), 0);
 }
 
 /** A count of something, grouped: `1,240`. */

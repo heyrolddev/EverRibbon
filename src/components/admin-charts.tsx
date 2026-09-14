@@ -1,4 +1,4 @@
-import { money } from "../lib/format.ts";
+import { money } from "@/lib/format";
 /**
  * Dashboard chart primitives.
  *

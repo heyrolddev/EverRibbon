@@ -99,8 +99,14 @@
   --color-accent-fill: var(--accent-fill);
   --color-on-accent: var(--on-accent);
 
-  --font-display: var(--font-display);
-  --font-sans: var(--font-body);
+  /*
+   * The faces are loaded by next/font in layout.tsx, which exposes each as
+   * --font-*-face. The config decides which stack uses them and what falls
+   * back, and is injected as --font-*-stack. Naming the two ends differently
+   * is what stops `--font-display: var(--font-display)` resolving to itself.
+   */
+  --font-display: var(--font-display-stack);
+  --font-sans: var(--font-body-stack);
   --font-mono: var(--font-mono-stack);
 }
 

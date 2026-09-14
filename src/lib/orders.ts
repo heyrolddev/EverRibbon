@@ -148,7 +148,7 @@ export function isPacked(fulfillment: string): boolean {
 }
 
 /* ============================================================
- * How many of one dish may go on one line
+ * How many of one product may go on one line
  *
  * This lives here, shared, because of how it went wrong.
  *
@@ -169,7 +169,7 @@ export function isPacked(fulfillment: string): boolean {
  * ============================================================ */
 
 /**
- * Ninety-nine of one dish.
+ * Ninety-nine of one product.
  *
  * A ceiling rather than no ceiling, because a stall that gets an order for
  * four thousand servings has been probed, not patronised — and because the
@@ -197,7 +197,7 @@ export function quantityProblem(
     return "Please choose at least one of each item.";
   }
   if (qty > MAX_LINE_QTY) {
-    return `That's more than ${MAX_LINE_QTY} of one dish — please ring us on +63 947 353 3060 so we can prepare for a large order.`;
+    return `That's more than ${MAX_LINE_QTY} of one product — please ring us on +63 947 353 3060 so we can prepare for a large order.`;
   }
   return null;
 }

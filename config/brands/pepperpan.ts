@@ -74,8 +74,10 @@ export const pepperpan: BrandConfig = {
   roles: { accentFill: "brand-700", onAccent: "paper-50" },
 
   fonts: {
-    display: '"Fraunces", Georgia, serif',
-    body: '"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    // The face itself is loaded by next/font in layout.tsx; this names it and
+    // says what to fall back to while it arrives.
+    display: 'var(--font-display-face), Georgia, serif',
+    body: 'var(--font-body-face), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    mono: 'var(--font-mono-face), ui-monospace, SFMono-Regular, Menlo, monospace',
   },
 };

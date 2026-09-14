@@ -1,0 +1,206 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { setOrderStatus } from "@/app/admin/orders/actions";
+import { STATUS_LABELS, statusesFor, type OrderStatus } from "@/lib/orders";
+import { moneyLine, type MoneyState } from "@/lib/payments";
+import { hqTitle } from "@/lib/hq-theme";
+import { CANCEL_REASONS, REASON_LIMIT } from "@/lib/cancellation";
+
+export function OrderStatusPicker({
+  orderId,
+  status,
+  fulfillment,
+  money,
+}: {
+  orderId: string;
+  status: OrderStatus;
+  /** Pickup orders never go "on the way", so that step isn't offered. */
+  fulfillment: string;
+  /** What's been paid, so completing an unpaid order can ask first. */
+  money?: MoneyState;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<OrderStatus | null>(null);
+  // Cancelling asks why. Held separately from `confirming` because it is not
+  // a yes/no — there is something to say before it can go through.
+  const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState<string>("");
+  const [detail, setDetail] = useState("");
+
+  /**
+   * Completing an order that still owes money is the one status change worth
+   * interrupting. It's the moment the food leaves the shop's hands, and after
+   * it the order drops off the open queue — so an unpaid balance stops being
+   * something anyone is looking at. Asking here costs a tap; not asking costs
+   * the price of the product.
+   *
+   * It asks rather than refuses: a customer handing over cash at the counter
+   * is normal, and the shop is right to complete that order. It just has to be
+   * a decision instead of an accident.
+   */
+  function attempt(next: OrderStatus) {
+    // Cancelling is the one change that takes money back out of the drawer,
+    // and it used to leave nothing behind. It asks now.
+    if (next === "cancelled") {
+      setReason("");
+      setDetail("");
+      setError(null);
+      setCancelling(true);
+      return;
+    }
+    if (next === "completed" && money && money.balance > 0) {
+      setConfirming(next);
+      return;
+    }
+    change(next);
+  }
+
+  function change(next: OrderStatus, why?: string) {
+    setConfirming(null);
+    setCancelling(false);
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await setOrderStatus(orderId, next, why);
+        if (res.error) setError(res.error);
+        else router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not update the status.");
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <select
+        value={status}
+        disabled={pending}
+        onChange={(e) => attempt(e.target.value as OrderStatus)}
+        className="rounded-full border-2 border-ink-950/15 bg-paper-50 px-4 py-2 text-sm font-bold text-ink-950 outline-none transition-colors focus:border-brand-700 disabled:opacity-60"
+      >
+        {statusesFor(fulfillment).map((s) => (
+          <option key={s} value={s}>
+            {STATUS_LABELS[s]}
+          </option>
+        ))}
+      </select>
+      {error && <span className="text-xs font-semibold text-brand-800">{error}</span>}
+
+      {cancelling && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[60] grid place-items-center p-4"
+        >
+          <button
+            aria-label="Close"
+            onClick={() => setCancelling(false)}
+            className="absolute inset-0 bg-ink-950/70"
+          />
+          <div className="relative w-full max-w-sm rounded-3xl bg-paper-50 p-6 text-left shadow-2xl ring-1 ring-ink-950/10">
+            <p className={hqTitle}>Why is this cancelled?</p>
+            <p className="mt-2 text-sm text-ink-900/70">
+              It is the only record of where the money went. Your name goes on
+              it with the reason.
+            </p>
+
+            {/* A list rather than a blank box. A required free-text field
+                produces "asdf" by the third rush, and a reason nobody can
+                group is a reason nobody can count later. */}
+            <div className="mt-4 flex flex-col gap-1.5">
+              {CANCEL_REASONS.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setReason(r)}
+                  className={`rounded-xl px-4 py-2.5 text-left text-sm font-bold transition-colors ${
+                    reason === r
+                      ? "bg-ink-950 text-paper-50"
+                      : "bg-ink-950/[0.05] text-ink-950 hover:bg-ink-950/10"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            <input
+              value={detail}
+              onChange={(e) => setDetail(e.target.value)}
+              maxLength={REASON_LIMIT}
+              placeholder="Anything to add (optional)"
+              className="mt-3 w-full rounded-xl bg-paper-100 px-3 py-2.5 text-sm ring-1 ring-ink-950/10 focus:outline-none focus:ring-2 focus:ring-accent-200"
+            />
+
+            {error && (
+              <p className="mt-3 text-sm font-semibold text-brand-800">{error}</p>
+            )}
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                onClick={() => setCancelling(false)}
+                className="rounded-full px-5 py-3 text-sm font-bold text-ink-900/70 transition-colors hover:text-ink-950"
+              >
+                Keep the order
+              </button>
+              <button
+                disabled={!reason || pending}
+                onClick={() =>
+                  change("cancelled", detail.trim() ? `${reason} — ${detail.trim()}` : reason)
+                }
+                className="rounded-full bg-brand-700 px-6 py-3 text-sm font-black text-paper-50 transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              >
+                {pending ? "Cancelling…" : "Cancel the order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirming && money && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[60] grid place-items-center p-4"
+        >
+          <button
+            aria-label="Cancel"
+            onClick={() => setConfirming(null)}
+            className="absolute inset-0 bg-ink-950/70"
+          />
+          <div className="relative w-full max-w-sm rounded-3xl bg-paper-50 p-6 text-left shadow-2xl ring-1 ring-ink-950/10">
+            <p className={hqTitle}>
+              This one still owes money
+            </p>
+            <p className="mt-3 rounded-2xl bg-brand-50 px-4 py-3 font-bold text-brand-800">
+              {moneyLine(money)}
+            </p>
+            <p className="mt-3 text-sm text-ink-900/70">
+              Completing it takes the order off your open list. If they paid
+              cash at the counter, mark it paid first so your figures are
+              right.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                onClick={() => setConfirming(null)}
+                className="rounded-full px-5 py-3 text-sm font-bold text-ink-900/70 transition-colors hover:text-ink-950"
+              >
+                Go back
+              </button>
+              <button
+                onClick={() => change(confirming)}
+                autoFocus
+                className="rounded-full bg-brand-700 px-6 py-3 text-sm font-black text-paper-50 transition-transform hover:scale-[1.02]"
+              >
+                Complete anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

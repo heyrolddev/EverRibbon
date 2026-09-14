@@ -77,10 +77,10 @@ export const everribbon: BrandConfig = {
   roles: { accentFill: "brand-400", onAccent: "ink-950" },
 
   fonts: {
-    // A didone — the letterform of engraved invitations, and the printed cousin
-    // of foil on ribbon. Optical sizing keeps its hairlines alive when small.
-    display: '"Bodoni Moda", Didot, Georgia, serif',
-    body: '"Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    mono: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+    // The face itself is loaded by next/font in layout.tsx; this names it and
+    // says what to fall back to while it arrives.
+    display: 'var(--font-display-face), Didot, Georgia, serif',
+    body: 'var(--font-body-face), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    mono: 'var(--font-mono-face), ui-monospace, SFMono-Regular, Menlo, monospace',
   },
 };

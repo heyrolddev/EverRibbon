@@ -1,0 +1,437 @@
+"use client";
+import { brand } from "../../config/index.ts";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Logo } from "@/components/logo";
+import type { AdminBadges } from "@/lib/admin-badges";
+import { SignOutButton } from "@/components/sign-out-button";
+import { DailyBackup } from "@/components/daily-backup";
+import { ShiftClock } from "@/components/shift-clock";
+import { useOrderRealtime } from "@/lib/use-order-realtime";
+import { roleCan, roleLabel, type Capability } from "@/lib/permissions";
+import { accentFor } from "@/lib/hq-theme";
+import { useShiftRealtime } from "@/lib/use-shift-realtime";
+
+/**
+ * HQ as a workspace rather than a web page.
+ *
+ * A row of pills across the top has a hard ceiling: it can only hold what fits
+ * on one line, so every new screen either shrinks the others or gets hidden
+ * behind a breakpoint. A sidebar has no such ceiling — it grows downward,
+ * which is free — and it does something the pills couldn't: show where you are
+ * inside the whole system, not just which pill is lit.
+ *
+ * Same shape on both, which is the point. On a desktop the rail is always
+ * there. On a phone the identical rail slides in over the page, so the owner
+ * learns one layout and finds the same thing in the same place on the counter
+ * tablet and in their hand.
+ */
+
+type Item = {
+  href: string;
+  label: string;
+  icon: string;
+  /** Which count in `badges` belongs on this row, if any. */
+  badge?: keyof AdminBadges;
+  /**
+   * What you must be able to do for this row to exist.
+   *
+   * Hidden entirely rather than shown and then refused: a row that exists only
+   * to say "you can't" is a worse answer than a row that isn't there. The
+   * pages themselves still check, because hiding a link has never been a
+   * permission — this only decides what is worth offering.
+   *
+   * Named as a capability rather than a role so that the sidebar and the page
+   * behind it cannot drift: both ask the same question of the same table.
+   */
+  needs?: Capability;
+};
+type Group = { title: string; items: Item[] };
+
+const GROUPS: Group[] = [
+  {
+    title: "Every day",
+    items: [
+      { href: "/admin", label: "Today", icon: "◉" },
+      // First row after Today, because the moment somebody needs it is the
+      // moment they are looking at a number they don't recognise — and that
+      // happens on the screen they open first.
+      { href: "/admin/ask", label: "Ask HQ", icon: "✽", needs: "assistant" },
+      { href: "/admin/counter", label: "Counter", icon: "◫", needs: "till" },
+      { href: "/admin/orders", label: "Orders", icon: "▤", badge: "orders", needs: "orders" },
+      // Staff lose this one: it is where prices, photos and descriptions are
+      // set. A manager keeps it to mark a product sold out mid-service, and the
+      // screen itself is what hides the price fields from them.
+      { href: "/admin/menu", label: "Menu", icon: "☰", needs: "menu.availability" },
+      { href: "/admin/inbox", label: "Inbox", icon: "✉", badge: "inbox", needs: "chat" },
+      // Sits beside Menu because it is the same job seen from outside: what
+      // the shopfront says. A manager running a service is exactly who decides
+      // a promo goes up today, so it is not held back to the owner.
+      { href: "/admin/promos", label: "Promos & news", icon: "✦", needs: "announcements" },
+    ],
+  },
+  {
+    // The half of the business that had software written for it in the very
+    // first migration and no screen until now: fourteen tables of recipes,
+    // materials and costs that nothing in the app ever read.
+    title: "The kitchen",
+    items: [
+      { href: "/admin/costing", label: "Product costs", icon: "◍", needs: "costs" },
+      // Everyone who works here keeps this row — but it is two different
+      // screens behind it. Staff get counts and a waste button; a manager gets
+      // the money, the restocking and the recipes.
+      { href: "/admin/inventory", label: "Inventory", icon: "▢", needs: "stock.view" },
+    ],
+  },
+  {
+    title: "Understand",
+    items: [
+      { href: "/admin/analytics", label: "Analytics", icon: "◈", needs: "business" },
+      // Named apart from "Payments" on purpose: that one is how customers pay
+      // the shop, this one is what the shop pays out. Sharing the ₱ icon as
+      // well would have made two very different screens look like a pair.
+      { href: "/admin/money", label: "Costs & cash", icon: "◆", needs: "business" },
+      { href: "/admin/reviews", label: "Reviews", icon: "★", needs: "chat" },
+      { href: "/admin/customers", label: "Customers", icon: "◑", needs: "business" },
+      { href: "/admin/staff", label: "Staff", icon: "◔", badge: "staff", needs: "staff.manage" },
+      { href: "/admin/faq", label: "Answers", icon: "?", needs: "faq" },
+    ],
+  },
+  {
+    title: "Set up once",
+    items: [
+      { href: "/admin/hours", label: "Hours", icon: "◷", needs: "settings" },
+      { href: "/admin/delivery", label: "Delivery", icon: "→", needs: "settings" },
+      { href: "/admin/payments", label: "Payments", icon: brand.currency.symbol, badge: "payments", needs: "settings" },
+      { href: "/admin/alerts", label: "Alerts", icon: "🔔", needs: "settings" },
+      // No capability, on purpose. This is the one row that belongs to the
+      // person rather than the shop, and what it carries — a role offer
+      // waiting to be accepted — arrives for whoever has the least access.
+      { href: "/admin/me", label: "My account", icon: "◐" },
+    ],
+  },
+  {
+    // Split out of "Set up once", because neither of these is done once:
+    // a backup is only worth anything if it keeps happening.
+    title: "Your data",
+    items: [
+      { href: "/admin/backup", label: "Backup", icon: "⤓", needs: "settings" },
+      { href: "/admin/reset", label: "Start fresh", icon: "⟲", needs: "settings" },
+    ],
+  },
+];
+
+const ALL = GROUPS.flatMap((g) => g.items);
+
+/** "/admin" only matches itself; everything else matches its subpages too. */
+function isActive(pathname: string, href: string) {
+  return href === "/admin" ? pathname === href : pathname.startsWith(href);
+}
+
+function currentTitle(pathname: string): string {
+  // Longest match wins, so /admin/orders doesn't answer to /admin.
+  const hit = [...ALL]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((i) => isActive(pathname, i.href));
+  return hit?.label ?? "HQ";
+}
+
+/**
+ * The count on a row, in the one place it's defined.
+ *
+ * Gold on the active row and brand red elsewhere, because the active row's
+ * own background is already gold — a gold pill on gold is invisible, which is
+ * the one thing a badge may never be.
+ */
+function Badge({ n, active }: { n: number; active: boolean }) {
+  if (n <= 0) return null;
+  return (
+    <span
+      className={`ml-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[11px] font-black tabular-nums ${
+        active ? "bg-ink-950 text-accent-200" : "bg-brand-700 text-paper-50"
+      }`}
+    >
+      {n > 99 ? "99+" : n}
+    </span>
+  );
+}
+
+function Rail({
+  pathname,
+  onNavigate,
+  email,
+  role,
+  badges,
+  connected,
+  shiftStartedAt,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+  email: string;
+  role: string;
+  badges: AdminBadges;
+  connected: boolean;
+  shiftStartedAt: string | null;
+}) {
+  return (
+    <div className="flex h-full flex-col gap-6 overflow-y-auto bg-ink-950 px-4 py-6">
+      <Link href="/admin" onClick={onNavigate} className="px-2">
+        <Logo width={130} className="h-auto w-[130px]" />
+        <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-accent-200">
+          {roleLabel(role)} · HQ
+        </p>
+      </Link>
+
+      <nav className="flex flex-1 flex-col gap-6">
+        {GROUPS.map((group) => ({
+          ...group,
+          items: group.items.filter((i) => !i.needs || roleCan(role, i.needs)),
+        }))
+          .filter((group) => group.items.length > 0)
+          .map((group) => (
+          <div key={group.title}>
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-paper-100/30">
+              {group.title}
+            </p>
+            <ul className="flex flex-col gap-0.5">
+              {group.items.map((item) => {
+                const active = isActive(pathname, item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors ${
+                        active
+                          ? "bg-brand-700 text-paper-50"
+                          : "text-paper-100/70 hover:bg-paper-50/10 hover:text-paper-50"
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`w-4 shrink-0 text-center text-xs ${
+                          active ? "opacity-70" : "opacity-40"
+                        }`}
+                      >
+                        {item.icon}
+                      </span>
+                      <span className="min-w-0 truncate">{item.label}</span>
+                      <Badge
+                        n={item.badge ? badges[item.badge] : 0}
+                        active={active}
+                      />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <div className="border-t border-paper-50/10 pt-4">
+        {/* Above the account it belongs to, and above the way out — clocking
+            out and signing out are different things and sit next to each
+            other so nobody does one meaning the other. */}
+        <div className="mb-2">
+          <ShiftClock open={shiftStartedAt !== null} startedAt={shiftStartedAt} />
+        </div>
+        <Link
+          href="/"
+          onClick={onNavigate}
+          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-paper-100/70 transition-colors hover:bg-paper-50/10 hover:text-paper-50"
+        >
+          <span aria-hidden className="w-4 shrink-0 text-center text-xs opacity-40">
+            ↗
+          </span>
+          View shop
+        </Link>
+        <p className="truncate px-3 pb-1 pt-3 text-[11px] text-paper-100/35">
+          {email}
+        </p>
+        {/* Says whether the counts above can be trusted to be current. A
+            sidebar that quietly stopped updating looks exactly like a quiet
+            afternoon. */}
+        <p className="flex items-center gap-2 px-3 pb-1 text-[11px] text-paper-100/35">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              connected ? "animate-pulse bg-ok-500" : "bg-paper-100/25"
+            }`}
+          />
+          {connected ? "Live" : "Reconnecting…"}
+        </p>
+        {/* Last thing in the rail, under the account it signs out of. HQ had
+            no way out at all — the only sign-out lived in the shop header,
+            which the rail replaces, so leaving HQ meant leaving HQ first. */}
+        <SignOutButton variant="rail" />
+      </div>
+    </div>
+  );
+}
+
+export function AdminShell({
+  children,
+  email,
+  role,
+  badges,
+  shiftStartedAt,
+}: {
+  children: React.ReactNode;
+  email: string;
+  role: string;
+  badges: AdminBadges;
+  /** When the running shift began, or null when nobody is clocked in. */
+  shiftStartedAt: string | null;
+}) {
+  const pathname = usePathname();
+  const waiting = badges.orders + badges.inbox + badges.payments + badges.staff;
+
+  // Subscribed here, in the shell, so *every* HQ screen stays current — and
+  // with it the counts in the rail, which are fetched by the layout this sits
+  // in. It used to live only in the orders banner, which is on two pages: the
+  // owner could sit on Payments while three orders came in and the rail would
+  // go on saying nothing until they navigated.
+  const { connected } = useOrderRealtime({ channelKey: "shell" });
+  // Subscribed in the shell, beside the orders one, because the clock it
+  // keeps honest is in the rail — which is on every HQ screen. Put on the
+  // Staff page instead, the counter tablet (which never opens that page)
+  // would go on showing a stale clock all day, and that is the case this is
+  // for.
+  useShiftRealtime("shell");
+  // The drawer remembers which page it was opened on, and is only open while
+  // that's still the page. Derived rather than synchronised: every link
+  // already closes it on click, but the back button changes the path without
+  // one, and a drawer left hanging over the new page is disorienting.
+  const [openedOn, setOpenedOn] = useState<string | null>(null);
+  const open = openedOn === pathname;
+  const setOpen = (next: boolean) => setOpenedOn(next ? pathname : null);
+
+  // A drawer that traps you is worse than no drawer.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenedOn(null);
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  return (
+    // The section's colour, set once here and read by every heading on the
+    // page through `hqTitle`. Set on the whole shell rather than on `<main>`
+    // so the phone drawer's header picks it up as well — the accent is meant
+    // to say which part of HQ you're in, and the drawer is where you go to
+    // change that.
+    <div
+      className="flex min-h-screen bg-paper-50"
+      style={{ "--hq-accent": accentFor(pathname) } as React.CSSProperties}
+    >
+      {/* Desktop rail — always there, never in the way. */}
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 lg:block">
+        <Rail
+          pathname={pathname}
+          email={email}
+          role={role}
+          badges={badges}
+          connected={connected}
+          shiftStartedAt={shiftStartedAt}
+        />
+      </aside>
+
+      {/* Phone drawer — the same rail, over the page. */}
+      {open && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+            className="absolute inset-0 bg-ink-950/60"
+          />
+          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] shadow-2xl">
+            <Rail
+              pathname={pathname}
+              email={email}
+              role={role}
+              badges={badges}
+              connected={connected}
+              shiftStartedAt={shiftStartedAt}
+              onNavigate={() => setOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Phone bar. It says where you are, because without the rail in view
+            a page of numbers doesn't tell you which page it is. */}
+        <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-ink-950/10 bg-paper-50/95 px-4 py-3 backdrop-blur lg:hidden">
+          {/* On a phone the rail is behind this button, so every badge inside
+              it is invisible until someone thinks to look. The count comes out
+              onto the button itself: the whole point was answering "is there
+              anything for me?" without opening anything. */}
+          <button
+            onClick={() => setOpen(true)}
+            aria-label={
+              waiting > 0
+                ? `Open menu — ${waiting} thing${waiting === 1 ? "" : "s"} need you`
+                : "Open menu"
+            }
+            aria-expanded={open}
+            className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink-950 text-paper-50"
+          >
+            <span aria-hidden className="text-lg leading-none">
+              ☰
+            </span>
+            {waiting > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-brand-700 px-1 text-[10px] font-black tabular-nums text-paper-50 ring-2 ring-paper-50">
+                {waiting > 99 ? "99+" : waiting}
+              </span>
+            )}
+          </button>
+          <p className="min-w-0 flex-1 truncate font-display text-lg font-black text-ink-950">
+            {currentTitle(pathname)}
+          </p>
+          <Link
+            href="/"
+            className="shrink-0 rounded-full bg-ink-950/5 px-3 py-1.5 text-xs font-bold text-ink-950 ring-1 ring-ink-950/10"
+          >
+            Shop ↗
+          </Link>
+        </header>
+
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+          {/* Off the clock, and the server will refuse everything, so say so
+              here rather than letting somebody find out one tap at a time.
+              
+              Above the page and on every screen, because the thing it is
+              warning about is not on any one page — it is the till, the board,
+              the store room and the inbox all at once. The owner never sees
+              it: they are not on a rota. */}
+          {shiftStartedAt === null && role !== "owner" && (
+            <div className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-brand-700 px-5 py-4 text-paper-50">
+              <p className="font-display text-base font-black">
+                You&apos;re not clocked in.
+              </p>
+              <p className="text-sm text-paper-50/85">
+                Nothing can be rung up, moved or changed until you are — the
+                shift is what puts your name on it. The clock is at the bottom
+                of the menu.
+              </p>
+            </div>
+          )}
+          {children}
+        </main>
+
+        {/* Renders nothing. Takes the day's safety copy if one is due — see
+            the component for why the browser fires this and not the server. */}
+        <DailyBackup />
+      </div>
+    </div>
+  );
+}

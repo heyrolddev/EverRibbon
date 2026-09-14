@@ -1,0 +1,108 @@
+import { brand } from "../../../config/index.ts";
+import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
+import { Stars } from "@/components/stars";
+import { ReviewList } from "@/components/review-list";
+import { getPublicReviews } from "@/lib/reviews-server";
+import { isConfigured } from "@/lib/auth";
+
+export const metadata = {
+  title: "Reviews",
+  description: `What our customers say about ${brand.name}.`,
+};
+
+export default async function ReviewsPage() {
+  const { reviews, average, count } = isConfigured()
+    ? await getPublicReviews(100)
+    : { reviews: [], average: 0, count: 0 };
+
+  // A distribution bar reads better than five numbers, and it's one measure
+  // across five ordered buckets — so one hue, darkest at the top score.
+  const buckets = [5, 4, 3, 2, 1].map((star) => ({
+    star,
+    n: reviews.filter((r) => r.rating === star).length,
+  }));
+
+  return (
+    <main className="flex-1">
+      <PageHeader
+        eyebrow="Straight from the customers"
+        title="Reviews"
+        subtitle={
+          count > 0
+            ? `${average.toFixed(1)} out of 5 from ${count} review${count === 1 ? "" : "s"}.`
+            : "Be the first to tell us how we did."
+        }
+      />
+
+      <section className="mx-auto max-w-3xl px-6 py-14">
+        {count === 0 ? (
+          <div className="rounded-3xl border-2 border-dashed border-brand-300 bg-paper-100 p-10 text-center">
+            <p className="font-display text-2xl font-bold text-ink-950">
+              No reviews yet
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-ink-900/70">
+              Only customers who&apos;ve actually received an order can leave
+              one — so every review here is from a real ${brand.name} product.
+            </p>
+            <Link
+              href="/menu"
+              className="mt-6 inline-block rounded-full bg-brand-700 px-7 py-3 font-bold text-paper-50 transition-transform hover:scale-105"
+            >
+              Order something →
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="mb-10 flex flex-col items-center gap-6 rounded-3xl bg-paper-100 p-8 ring-1 ring-ink-950/10 sm:flex-row sm:items-start">
+              <div className="text-center">
+                <p className="font-display text-6xl font-black text-brand-700">
+                  {average.toFixed(1)}
+                </p>
+                <Stars rating={average} size="md" className="mt-1" />
+                <p className="mt-1 text-xs text-ink-900/55">
+                  {count} review{count === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              <ul className="flex w-full flex-col gap-1.5">
+                {buckets.map(({ star, n }) => (
+                  <li key={star} className="flex items-center gap-3 text-xs">
+                    <span className="w-10 shrink-0 font-semibold text-ink-900/70">
+                      {star} star
+                    </span>
+                    <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-ink-950/10">
+                      <span
+                        className="block h-full rounded-full bg-accent-300"
+                        style={{ width: `${count ? (n / count) * 100 : 0}%` }}
+                      />
+                    </span>
+                    <span className="w-6 shrink-0 text-right font-semibold text-ink-900/70">
+                      {n}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <ReviewList reviews={reviews} />
+
+            {/* This paragraph used to say every review here was left by a
+                customer on this site. Now that the shop can add reviews
+                people sent it on Messenger, that sentence would no longer be
+                true — so it says what is actually the case instead, and the
+                relayed ones carry a badge. A claim you can check beats a
+                claim you have to take on faith. */}
+            <p className="mt-10 text-center text-sm text-ink-900/55">
+              Every review here is from a real {brand.name} product. Most were
+              posted by the customer themselves, which the site only allows
+              once an order has been received. The ones marked{" "}
+              <span className="font-semibold">Sent on Messenger</span> were
+              written to us in a chat and typed in here by the shop.
+            </p>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}

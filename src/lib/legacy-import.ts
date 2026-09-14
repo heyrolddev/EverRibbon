@@ -3,7 +3,7 @@ import { brand } from "../../config/index.ts";
  * Reading a backup out of the phone app this system replaced.
  *
  * The stall ran on a phone app before it ran on this. That app holds the real
- * figures — 93 ingredients counted by hand, 83 dishes with their recipes, a
+ * figures — 93 materials counted by hand, 83 products with their recipes, a
  * month of sales — and this system holds a schema derived from it, which is
  * why almost every field lines up. Almost, and the gaps are the whole job.
  *
@@ -15,10 +15,10 @@ import { brand } from "../../config/index.ts";
  * THE FOUR THINGS THIS FILE EXISTS TO GET RIGHT
  *
  * 1. Names. The old app is camelCase JavaScript objects; this one is
- *    snake_case Postgres. `inventory` is `ingredients`, `waste` is
- *    `waste_log`, `invId` is `ingredient_id`.
+ *    snake_case Postgres. `inventory` is `materials`, `waste` is
+ *    `waste`, `invId` is `material_id`.
  *
- * 2. Shape. The old app nests — a meal carries its recipe, an ingredient
+ * 2. Shape. The old app nests — a product carries its recipe, a material
  *    carries its lots. Postgres does not, so each nested array becomes rows
  *    in a child table carrying their parent's id.
  *
@@ -27,7 +27,7 @@ import { brand } from "../../config/index.ts";
  *    into the live order queue, where they would show as tickets waiting to
  *    be cooked and could fire ETA alerts at the owner. They are completed
  *    walk-ins and must arrive saying so. The same trap sits on `is_public`,
- *    which defaults true: 83 dishes with no photographs, 32 of them "(T.O)"
+ *    which defaults true: 83 products with no photographs, 32 of them "(T.O)"
  *    duplicates, would appear on the customer-facing menu the moment the
  *    import finished. They arrive hidden; publishing is a decision.
  *
@@ -68,13 +68,24 @@ export type BackupKind = "legacy" | "native" | "unknown";
  * That is also what stops one shop's backup being restored into another, which
  * would silently merge two businesses' books. What separates
  * them is the table names, and they do not overlap at all: the old app writes
- * `inventory` and `cashLedger`, this one writes `ingredients` and
+ * `inventory` and `cashLedger`, this one writes `materials` and
  * `cash_ledger`. So the owner never has to know which file they are holding,
  * which matters because the moment they have to choose is the moment they can
  * choose wrong.
  */
+/*
+ * The two sides of the boundary, and why they must not be renamed together.
+ *
+ * LEGACY_MARKERS are keys in a file the old app wrote. That format is already
+ * on people's disks and cannot be changed retroactively, so these stay exactly
+ * as they were spelled — renaming them with the schema made the detector stop
+ * recognising real backups and report them as "not from the old app", which
+ * looks like a corrupt file rather than a bug.
+ *
+ * NATIVE_MARKERS are this schema's own table names and DO follow the rename.
+ */
 const LEGACY_MARKERS = ["inventory", "cashLedger", "consumptionLog", "purchaseLog", "activityLog"];
-const NATIVE_MARKERS = ["ingredients", "cash_ledger", "consumption_log", "purchase_log", "activity_log"];
+const NATIVE_MARKERS = ["materials", "cash_ledger", "material_usage", "purchases", "activity_log"];
 
 export function detectBackupKind(file: LegacyFile): BackupKind {
   const keys = Object.keys(file.data ?? {});
@@ -156,19 +167,29 @@ function tags(v: unknown): string[] {
 /**
  * Only the two kinds a recipe line may point at.
  *
- * `meal_ingredients.ref_type` carries a check constraint, and a row that
+ * `product_materials.ref_type` carries a check constraint, and a row that
  * violates it fails the whole chunk it travels in. Filtering here means one
  * unrecognised line is one line lost, not five hundred.
  */
-function refType(v: unknown): "inv" | "batch" | null {
+function refType(v: unknown): "inv" | "production_run" | null {
   const s = str(v)?.toLowerCase();
-  return s === "inv" || s === "batch" ? s : null;
+  if (s === "inv") return "inv";
+  // The old app called a produced component a batch; this schema calls it a
+  // production run, and the check constraint on ref_type only accepts the
+  // latter. Translating here is the whole job of this module.
+  if (s === "batch" || s === "production_run") return "production_run";
+  return null;
 }
 
-/** As above, but waste may also point at a finished dish. */
-function wasteSource(v: unknown): "inv" | "batch" | "meal" | null {
+/** As above, but waste may also point at a finished product. */
+function wasteSource(v: unknown): "inv" | "production_run" | "product" | null {
   const s = str(v)?.toLowerCase();
-  return s === "inv" || s === "batch" || s === "meal" ? s : null;
+  if (s === "inv") return "inv";
+  // Reads the old app's words, returns this schema's. Renaming both sides
+  // together made every waste row from a legacy file come back as null.
+  if (s === "batch" || s === "production_run") return "production_run";
+  if (s === "meal" || s === "product") return "product";
+  return null;
 }
 
 /**
@@ -220,19 +241,19 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
 
   const out: Record<string, unknown[]> = {};
 
-  /* ---------------- ingredients, and their lots ---------------- */
+  /* ---------------- materials, and their lots ---------------- */
 
-  const ingredients: unknown[] = [];
+  const materials: unknown[] = [];
   const lots: unknown[] = [];
   let lotsWithoutId = 0;
 
   for (const r of rows(data, "inventory")) {
     const ingId = id(r.id);
     if (!ingId) {
-      skipped.push("an ingredient with no id");
+      skipped.push("a material with no id");
       continue;
     }
-    ingredients.push({
+    materials.push({
       id: ingId,
       name: str(r.name) ?? "Unnamed",
       unit: str(r.unit) ?? "pc",
@@ -252,7 +273,7 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
       }
       lots.push({
         id: lotId,
-        ingredient_id: ingId,
+        material_id: ingId,
         qty: num(l.qty),
         cost: num(l.cost),
         received_date: day(l.receivedDate),
@@ -263,26 +284,26 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
   if (lotsWithoutId > 0) {
     skipped.push(`${lotsWithoutId} stock lot${lotsWithoutId === 1 ? "" : "s"} with no id`);
   }
-  out.ingredients = ingredients;
-  out.ingredient_lots = lots;
+  out.materials = materials;
+  out.material_lots = lots;
 
-  /* ---------------- batches, and their recipes ---------------- */
+  /* ---------------- production_runs, and their recipes ---------------- */
 
-  const batches: unknown[] = [];
-  const batchIngredients: unknown[] = [];
+  const production_runs: unknown[] = [];
+  const productionRunMaterials: unknown[] = [];
 
   for (const r of rows(data, "batches")) {
-    const batchId = id(r.id);
-    if (!batchId) {
-      skipped.push("a batch with no id");
+    const productionRunId = id(r.id);
+    if (!productionRunId) {
+      skipped.push("a production_run with no id");
       continue;
     }
-    batches.push({
-      id: batchId,
-      name: str(r.name) ?? "Unnamed batch",
+    production_runs.push({
+      id: productionRunId,
+      name: str(r.name) ?? "Unnamed production_run",
       yield_qty: num(r.yieldQty),
       yield_unit: str(r.yieldUnit) ?? "g",
-      batch_stock: num(r.batchStock),
+      run_stock: num(r.batchStock),
       reorder_level: num(r.reorderLevel),
       manual_cost_per_unit: numOrNull(r.manualCostPerUnit),
     });
@@ -293,33 +314,33 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
       // No `id`: this child table is `bigserial`, and the importer clears a
       // parent's lines before inserting its new ones rather than upserting
       // them by a key the file does not have.
-      batchIngredients.push({ batch_id: batchId, ingredient_id: invId, qty: num(line.qty) });
+      productionRunMaterials.push({ production_run_id: productionRunId, material_id: invId, qty: num(line.qty) });
     }
   }
-  out.batches = batches;
-  out.batch_ingredients = batchIngredients;
+  out.production_runs = production_runs;
+  out.production_run_materials = productionRunMaterials;
 
-  /* ---------------- meals, recipes and combos ---------------- */
+  /* ---------------- products, recipes and combos ---------------- */
 
-  const meals: unknown[] = [];
-  const mealIngredients: unknown[] = [];
-  const mealComponents: unknown[] = [];
+  const products: unknown[] = [];
+  const productMaterials: unknown[] = [];
+  const productComponents: unknown[] = [];
   let badRefs = 0;
 
   for (const r of rows(data, "meals")) {
-    const mealId = id(r.id);
-    if (!mealId) {
-      skipped.push("a dish with no id");
+    const productId = id(r.id);
+    if (!productId) {
+      skipped.push("a product with no id");
       continue;
     }
-    meals.push({
-      id: mealId,
-      name: str(r.name) ?? "Unnamed dish",
+    products.push({
+      id: productId,
+      name: str(r.name) ?? "Unnamed product",
       price: num(r.price),
       kind: str(r.kind) === "combo" ? "combo" : "single",
       categories: tags(r.categories),
       // Hidden on arrival. See the header: `is_public` defaults true, and an
-      // import is not a decision to publish 83 photograph-less dishes.
+      // import is not a decision to publish 83 photograph-less products.
       is_public: false,
       is_available: true,
     });
@@ -331,42 +352,42 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
         badRefs += 1;
         continue;
       }
-      mealIngredients.push({ meal_id: mealId, ref_type: t, ref_id: ref, qty: num(line.qty) });
+      productMaterials.push({ product_id: productId, ref_type: t, ref_id: ref, qty: num(line.qty) });
     }
 
     for (const c of Array.isArray(r.components) ? (r.components as Record<string, unknown>[]) : []) {
       const ref = id(c?.mealId ?? c?.refId);
       if (!ref) continue;
-      mealComponents.push({ meal_id: mealId, component_meal_id: ref, qty: num(c.qty) });
+      productComponents.push({ product_id: productId, component_meal_id: ref, qty: num(c.qty) });
     }
   }
   if (badRefs > 0) skipped.push(`${badRefs} recipe line${badRefs === 1 ? "" : "s"} pointing nowhere`);
-  out.meals = meals;
-  out.meal_ingredients = mealIngredients;
-  out.meal_components = mealComponents;
+  out.products = products;
+  out.product_materials = productMaterials;
+  out.product_components = productComponents;
 
   // The vocabulary behind the menu's filter pills, built from the categories
-  // the dishes actually use.
+  // the products actually use.
   //
   // The old app has no equivalent table — a category there is just a string on
-  // a dish — so without this an import leaves `menu_categories` empty. The
-  // customer menu survives that now (it builds its pills from the dishes), but
+  // a product — so without this an import leaves `catalog_categories` empty. The
+  // customer menu survives that now (it builds its pills from the products), but
   // the table is what carries the colour and the sort order, and an owner who
   // wants Drinks last and green has nowhere to say so until a row exists.
   //
   // `sort_order` follows first appearance rather than the alphabet, because
-  // the order dishes were entered in is closer to how the owner thinks about
+  // the order products were entered in is closer to how the owner thinks about
   // the menu than A-to-Z is. `colour` is left at the column default, which
   // `colourOf` turns into a stable per-name fallback — so the pills are
   // coloured and distinguishable from the first minute, and every one of them
   // is still the owner's to change.
   const seen = new Map<string, number>();
-  for (const m of meals as { categories: string[] }[]) {
+  for (const m of products as { categories: string[] }[]) {
     for (const name of m.categories) {
       if (!seen.has(name)) seen.set(name, seen.size);
     }
   }
-  out.menu_categories = [...seen].map(([name, sort_order]) => ({ name, sort_order }));
+  out.catalog_categories = [...seen].map(([name, sort_order]) => ({ name, sort_order }));
 
   /* ---------------- orders and their lines ---------------- */
 
@@ -397,9 +418,9 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
     });
 
     for (const line of Array.isArray(r.lines) ? (r.lines as Record<string, unknown>[]) : []) {
-      const mealId = id(line?.mealId);
-      if (!mealId) continue;
-      orderLines.push({ order_id: orderId, meal_id: mealId, qty: num(line.qty), price_at_sale: num(line.priceAtSale) });
+      const productId = id(line?.mealId);
+      if (!productId) continue;
+      orderLines.push({ order_id: orderId, product_id: productId, qty: num(line.qty), price_at_sale: num(line.priceAtSale) });
     }
   }
   out.orders = orders;
@@ -407,11 +428,11 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
 
   /* ---------------- the logs ---------------- */
 
-  out.purchase_log = rows(data, "purchaseLog")
+  out.purchases = rows(data, "purchaseLog")
     .filter((r) => id(r.id) && id(r.invId))
     .map((r) => ({
       id: id(r.id),
-      ingredient_id: id(r.invId),
+      material_id: id(r.invId),
       lot_id: id(r.lotId),
       date: day(r.date),
       supplier: str(r.supplier),
@@ -420,22 +441,22 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
       logged_by: str(r.loggedBy),
     }));
 
-  out.consumption_log = rows(data, "consumptionLog")
+  out.material_usage = rows(data, "consumptionLog")
     .filter((r) => id(r.id) && id(r.invId))
     .map((r) => ({
       id: id(r.id),
-      ingredient_id: id(r.invId),
+      material_id: id(r.invId),
       date: day(r.date),
       qty: num(r.qty),
       type: str(r.type),
     }));
 
-  out.waste_log = rows(data, "waste")
+  out.waste = rows(data, "waste")
     .filter((r) => id(r.id))
     .map((r) => ({
       id: id(r.id),
       date: day(r.date),
-      ingredient_id: id(r.invId),
+      material_id: id(r.invId),
       qty: num(r.qty),
       unit: str(r.unit),
       reason: str(r.reason),

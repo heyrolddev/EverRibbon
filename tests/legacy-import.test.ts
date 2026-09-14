@@ -131,7 +131,7 @@ test("a phone-app file is recognised as legacy", () => {
 test("this system's own backup is recognised as native", () => {
   const native = {
     app: "PepperPan",
-    data: { ingredients: [], cash_ledger: [], consumption_log: [], meals: [{ id: "m" }] },
+    data: { materials: [], cash_ledger: [], material_usage: [], products: [{ id: "p" }] },
   };
   assert.equal(detectBackupKind(native), "native");
 });
@@ -153,7 +153,7 @@ test("imported orders are completed, never left to default to pending", () => {
 
 test("imported dishes are hidden from the customer menu", () => {
   const { backup } = convertLegacyBackup(legacyFile());
-  const meals = backup.data.meals as Record<string, unknown>[];
+  const meals = backup.data.products as Record<string, unknown>[];
   assert.equal(meals[0]!.is_public, false);
   assert.equal(meals[0]!.is_available, true);
 });
@@ -162,35 +162,35 @@ test("imported dishes are hidden from the customer menu", () => {
 
 test("nested lots become their own rows, each naming its ingredient", () => {
   const { backup, report } = convertLegacyBackup(legacyFile());
-  const lots = backup.data.ingredient_lots as Record<string, unknown>[];
+  const lots = backup.data.material_lots as Record<string, unknown>[];
   assert.equal(lots.length, 2, "the lot with no id is not importable");
-  assert.equal(lots[0]!.ingredient_id, "inv1");
+  assert.equal(lots[0]!.material_id, "inv1");
   assert.equal(lots[1]!.expiry_date, "2027-01-01");
   assert.ok(report.skipped.some((s) => s.includes("stock lot")));
 });
 
 test("a recipe line pointing nowhere is dropped, not carried as a bad row", () => {
   const { backup, report } = convertLegacyBackup(legacyFile());
-  const lines = backup.data.meal_ingredients as Record<string, unknown>[];
+  const lines = backup.data.product_materials as Record<string, unknown>[];
   assert.equal(lines.length, 2);
   assert.deepEqual(
     lines.map((l) => l.ref_type),
-    ["batch", "inv"]
+    ["production_run", "inv"]
   );
   assert.ok(report.skipped.some((s) => s.includes("recipe line")));
 });
 
 test("categories are trimmed and de-duplicated case-insensitively", () => {
   const { backup } = convertLegacyBackup(legacyFile());
-  const ing = backup.data.ingredients as Record<string, unknown>[];
+  const ing = backup.data.materials as Record<string, unknown>[];
   assert.deepEqual(ing[0]!.categories, ["Dry"]);
 });
 
 test("waste may point at a finished dish, which 0030 allows", () => {
   const { backup } = convertLegacyBackup(legacyFile());
-  const waste = backup.data.waste_log as Record<string, unknown>[];
-  assert.equal(waste[0]!.source_type, "meal");
-  assert.equal(waste[0]!.ingredient_id, "inv1");
+  const waste = backup.data.waste as Record<string, unknown>[];
+  assert.equal(waste[0]!.source_type, "product");
+  assert.equal(waste[0]!.material_id, "inv1");
   assert.equal(waste[0]!.logged_by, "harold");
 });
 
@@ -258,11 +258,11 @@ test("child rows with no id ask for their parent's rows to be cleared first", ()
   const { backup } = convertLegacyBackup(legacyFile());
 
   // This is what stops a second import doubling every recipe.
-  const recipes = parentsToClear("meal_ingredients", backup.data.meal_ingredients ?? []);
-  assert.deepEqual(recipes, { column: "meal_id", ids: ["m1"] });
+  const recipes = parentsToClear("product_materials", backup.data.product_materials ?? []);
+  assert.deepEqual(recipes, { column: "product_id", ids: ["m1"] });
 
-  const batchLines = parentsToClear("batch_ingredients", backup.data.batch_ingredients ?? []);
-  assert.deepEqual(batchLines, { column: "batch_id", ids: ["b1"] });
+  const batchLines = parentsToClear("production_run_materials", backup.data.production_run_materials ?? []);
+  assert.deepEqual(batchLines, { column: "production_run_id", ids: ["b1"] });
 
   const lines = parentsToClear("order_lines", backup.data.order_lines ?? []);
   assert.deepEqual(lines, { column: "order_id", ids: ["o1"] });
@@ -270,21 +270,21 @@ test("child rows with no id ask for their parent's rows to be cleared first", ()
 
 test("child rows that carry their own id are upserted, never cleared", () => {
   // This is the shape of one of THIS system's backups: bigserial ids present.
-  const rows = [{ id: 41, meal_id: "m1", ref_type: "inv", ref_id: "i1", qty: 1 }];
-  assert.equal(parentsToClear("meal_ingredients", rows), null);
+  const rows = [{ id: 41, product_id: "m1", ref_type: "inv", ref_id: "i1", qty: 1 }];
+  assert.equal(parentsToClear("product_materials", rows), null);
 });
 
 test("a parent table is never cleared, whatever its rows look like", () => {
-  assert.equal(parentsToClear("meals", [{ name: "no id here" }]), null);
-  assert.equal(parentsToClear("ingredients", [{ name: "nor here" }]), null);
+  assert.equal(parentsToClear("products", [{ name: "no id here" }]), null);
+  assert.equal(parentsToClear("materials", [{ name: "nor here" }]), null);
 });
 
 /* ---------------- refusing to crash on a hand-held file ---------------- */
 
 test("a file missing whole sections converts to empty rather than throwing", () => {
   const { backup, report } = convertLegacyBackup({ app: "PepperPan", data: {} });
-  assert.deepEqual(backup.data.ingredients, []);
-  assert.deepEqual(backup.data.meals, []);
+  assert.deepEqual(backup.data.materials, []);
+  assert.deepEqual(backup.data.products, []);
   assert.deepEqual(report.counts, {});
 });
 
@@ -293,13 +293,13 @@ test("rubbish where an array should be is treated as no rows", () => {
     app: "PepperPan",
     data: { inventory: "not an array", meals: [null, 7, { id: "m1", name: "Real" }] },
   });
-  assert.deepEqual(backup.data.ingredients, []);
-  assert.equal((backup.data.meals as unknown[]).length, 1);
+  assert.deepEqual(backup.data.materials, []);
+  assert.equal((backup.data.products as unknown[]).length, 1);
 });
 
 test("a quantity that is not a number becomes zero, not a rejected row", () => {
   const file = legacyFile();
   file.data.inventory[0]!.stock = "lots" as unknown as number;
   const { backup } = convertLegacyBackup(file);
-  assert.equal((backup.data.ingredients as Record<string, unknown>[])[0]!.stock, 0);
+  assert.equal((backup.data.materials as Record<string, unknown>[])[0]!.stock, 0);
 });

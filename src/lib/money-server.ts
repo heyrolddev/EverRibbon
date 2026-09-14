@@ -1,0 +1,405 @@
+import "server-only";
+import { orderLabel } from "@/lib/tickets";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * What the shop actually earns.
+ *
+ * Gross profit — price minus materials — is the number the costing screens
+ * give, and it is not earnings. Rent, kuryente, tubig and sweldo arrive on
+ * the first of the month whether or not anyone bought a bowl. Until those are
+ * in, every figure in HQ flatters the business.
+ *
+ * OE is applied per *day* rather than per order. Splitting a month's rent
+ * across individual sales needs a rule for how — evenly? by revenue? — and
+ * every rule is arbitrary, which makes any single order's "net profit" a
+ * number with an argument inside it. Days are what fixed costs are actually
+ * incurred in, so that is the level this works at.
+ */
+
+export type FixedCost = { id: string; label: string; amount: number; active: boolean };
+export type Asset = { id: string; name: string; amount: number; boughtOn: string | null; note: string | null };
+export type LedgerEntry = {
+  id: string;
+  date: string;
+  type: "in" | "out";
+  amount: number;
+  category: string | null;
+  note: string | null;
+  /**
+   * Whether this line was typed in or worked out from a sale.
+   *
+   * The balance always counted cash sales — see `onHand` below — but the
+   * history only ever listed `cash_ledger`, the rows somebody entered by
+   * hand. So the number moved and nothing on screen said why, which is the
+   * exact shape of a figure nobody trusts.
+   *
+   * Sales are not written into `cash_ledger` to fix that. They are derived at
+   * read time, because a sale is already a row in `orders` and copying it
+   * would mean two sources of truth for the same peso — and the balance would
+   * count it twice the moment anything went slightly wrong.
+   */
+  derived?: boolean;
+  /** Who was on the till. Only ever set on a derived line. */
+  by?: string | null;
+};
+export type Receivable = {
+  id: string;
+  date: string;
+  customer: string | null;
+  phone: string | null;
+  amount: number;
+  collected: number;
+  settled: boolean;
+  note: string | null;
+};
+
+export type MoneyPicture = {
+  fixedCosts: FixedCost[];
+  monthlyFixed: number;
+  openDays: number;
+  dailyOE: number;
+
+  /** Of every peso taken, how much is left after materials. */
+  marginRatio: number | null;
+  /** Waste and internal use, as a monthly rate — an ongoing cost to cover. */
+  monthlyWasteRate: number;
+  /** Sales a day needed to cover everything. Null when it can't be worked out. */
+  breakEvenDaily: number | null;
+  /** What the shop actually averages a day, over the same window. */
+  avgDailyRevenue: number;
+
+  /** Window the margin and averages were measured over. */
+  windowDays: number;
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
+  oeForWindow: number;
+  wasteForWindow: number;
+  netProfit: number;
+
+  cash: { enabled: boolean; onHand: number; startedOn: string | null; startedWith: number };
+  ledger: LedgerEntry[];
+  receivables: Receivable[];
+  owed: number;
+
+  assets: Asset[];
+  assetTotal: number;
+  payback: { from: string | null; earned: number; pct: number; paidOff: boolean } | null;
+};
+
+const WINDOW_DAYS = 30;
+
+export async function loadMoney(): Promise<MoneyPicture> {
+  const supabase = createAdminClient();
+  const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const [
+    { data: costs },
+    { data: assetRows },
+    { data: ledgerRows },
+    { data: receivableRows },
+    { data: settingsRow },
+    { data: orderRows },
+    { data: wasteRows },
+  ] = await Promise.all([
+    supabase.from("fixed_costs").select("*").order("amount", { ascending: false }),
+    supabase.from("assets").select("*").order("created_at", { ascending: false }),
+    supabase.from("cash_ledger").select("*").order("date", { ascending: false }).limit(100),
+    supabase.from("receivables").select("*").order("date", { ascending: false }).limit(100),
+    supabase
+      .from("settings")
+      .select(
+        "open_days_per_month, cash_balance_enabled, cash_balance_starting_amount, cash_balance_start_date, payback_from"
+      )
+      .eq("id", 1)
+      .maybeSingle(),
+    supabase
+      .from("orders")
+      .select("date, revenue, cogs, status, payment_method")
+      .gte("date", since),
+    supabase.from("waste").select("date, total_cost").gte("date", since),
+  ]);
+
+  const fixedCosts: FixedCost[] = ((costs ?? []) as FixedCost[]).map((c) => ({
+    ...c,
+    amount: Number(c.amount) || 0,
+  }));
+  const monthlyFixed = fixedCosts
+    .filter((c) => c.active)
+    .reduce((s, c) => s + c.amount, 0);
+  const openDays = Number(settingsRow?.open_days_per_month) || 26;
+  const dailyOE = openDays > 0 ? monthlyFixed / openDays : 0;
+
+  // Cancelled orders earned nothing and cost nothing.
+  const live = ((orderRows ?? []) as {
+    date: string;
+    revenue: number;
+    cogs: number;
+    status: string;
+    payment_method: string;
+  }[]).filter((o) => o.status !== "cancelled");
+
+  const revenue = live.reduce((s, o) => s + (Number(o.revenue) || 0), 0);
+  const cogs = live.reduce((s, o) => s + (Number(o.cogs) || 0), 0);
+  const grossProfit = revenue - cogs;
+
+  // Days the shop actually traded, not calendar days. Averaging a week of
+  // sales over thirty days understates the daily take by four times, and the
+  // break-even comparison is only meaningful against a like-for-like number.
+  const tradingDays = new Set(live.map((o) => o.date)).size;
+  const windowDays = Math.max(1, tradingDays);
+  const avgDailyRevenue = revenue / windowDays;
+
+  const wasteForWindow = ((wasteRows ?? []) as { total_cost: number }[]).reduce(
+    (s, w) => s + (Number(w.total_cost) || 0),
+    0
+  );
+  // Scaled to a month, because spoilage is an ongoing cost to cover and not a
+  // one-off — the same treatment rent gets.
+  const monthlyWasteRate = (wasteForWindow / windowDays) * 30;
+
+  const marginRatio = revenue > 0 ? grossProfit / revenue : null;
+  const breakEvenDaily =
+    marginRatio !== null && marginRatio > 0 && monthlyFixed > 0
+      ? (monthlyFixed + monthlyWasteRate) / marginRatio / openDays
+      : null;
+
+  const oeForWindow = dailyOE * windowDays;
+  const netProfit = grossProfit - oeForWindow - wasteForWindow;
+
+  // ---- cash ------------------------------------------------------------
+  const typedIn: LedgerEntry[] = ((ledgerRows ?? []) as LedgerEntry[]).map((l) => ({
+    ...l,
+    amount: Number(l.amount) || 0,
+  }));
+  const cashEnabled = Boolean(settingsRow?.cash_balance_enabled);
+  const startedOn = settingsRow?.cash_balance_start_date ?? null;
+  const startedWith = Number(settingsRow?.cash_balance_starting_amount) || 0;
+
+  let onHand = 0;
+  if (cashEnabled && startedOn) {
+    // Cash sales only. GCash never touched the drawer, so counting it here
+    // would make the drawer look permanently over.
+    const { data: cashSales } = await supabase
+      .from("orders")
+      .select("revenue")
+      .gte("date", startedOn)
+      .eq("payment_method", "cod")
+      .neq("status", "cancelled");
+    const takings = ((cashSales ?? []) as { revenue: number }[]).reduce(
+      (s, o) => s + (Number(o.revenue) || 0),
+      0
+    );
+    const { data: allLedger } = await supabase
+      .from("cash_ledger")
+      .select("type, amount")
+      .gte("date", startedOn);
+    const moved = ((allLedger ?? []) as { type: string; amount: number }[]).reduce(
+      (s, l) => s + (l.type === "in" ? 1 : -1) * (Number(l.amount) || 0),
+      0
+    );
+    onHand = startedWith + takings + moved;
+  }
+
+  /**
+   * Every cash sale and every cancelled cash sale, as lines in the history.
+   *
+   * This is display only — the arithmetic above is untouched — which is what
+   * makes it safe: nothing is double-counted, nothing needs backfilling, and
+   * orders from before today show up straight away.
+   *
+   * A cancelled cash order gets an "out" line rather than being left off.
+   * Leaving it off is technically consistent — `onHand` excludes it because
+   * the query filters cancelled rows — but it means money appears in the
+   * drawer one day and is silently gone the next. An owner looking for a
+   * shortfall needs to see the reversal and whose till it was on.
+   */
+  const derivedLines: LedgerEntry[] = [];
+  if (cashEnabled && startedOn) {
+    const { data: cashOrders } = await supabase
+      .from("orders")
+      .select("id, ticket, date, revenue, status, contact_name, logged_by, tag, cancelled_by")
+      .gte("date", startedOn)
+      .eq("payment_method", "cod")
+      .order("date", { ascending: false })
+      .limit(200);
+
+    const rows = (cashOrders ?? []) as {
+      id: string;
+      ticket: number | null;
+      date: string;
+      revenue: number;
+      status: string;
+      contact_name: string | null;
+      logged_by: string | null;
+      tag: string | null;
+      cancelled_by: string | null;
+    }[];
+
+    // Who cancelled, by name. `cancelled_by` is stamped at the moment of
+    // cancelling — unlike `logged_by`, which says who rang the sale up — so
+    // this is the one attribution a reversal can carry honestly.
+    const cancellerIds = [...new Set(rows.map((o) => o.cancelled_by).filter(Boolean))] as string[];
+    const cancellerName = new Map<string, string>();
+    if (cancellerIds.length > 0) {
+      const { data: people } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", cancellerIds);
+      for (const p of (people ?? []) as { id: string; full_name: string | null }[]) {
+        if (p.full_name?.trim()) cancellerName.set(p.id, p.full_name.trim());
+      }
+    }
+
+    for (const o of rows) {
+      const amount = Number(o.revenue) || 0;
+      if (amount === 0) continue;
+      const who = o.logged_by?.trim() || null;
+      const what = `${o.tag === "walk-in" ? "Counter sale" : "Order"} ${orderLabel(o.ticket, o.contact_name)}`;
+      derivedLines.push(
+        o.status === "cancelled"
+          ? {
+              id: `order-void-${o.id}`,
+              date: o.date,
+              type: "out",
+              amount,
+              category: "sale",
+              /**
+               * Named from `cancelled_by`, and only from `cancelled_by`.
+               *
+               * It briefly used `logged_by`, which is stamped when the sale is
+               * RUNG UP — so it put the cancellation on whoever was on the
+               * till at the time, very often not the person who cancelled it.
+               * A confident wrong name is worse than no name: it sends the
+               * owner to ask the wrong person about missing money. Orders
+               * cancelled before this column existed simply have no name, and
+               * say nothing rather than guessing.
+               */
+              note:
+                `${what} cancelled` +
+                (o.cancelled_by && cancellerName.has(o.cancelled_by)
+                  ? ` by ${cancellerName.get(o.cancelled_by)}`
+                  : ""),
+              derived: true,
+              by: o.cancelled_by ? (cancellerName.get(o.cancelled_by) ?? null) : null,
+            }
+          : {
+              id: `order-${o.id}`,
+              date: o.date,
+              type: "in",
+              amount,
+              category: "sale",
+              // Safe on the sale line: `logged_by` is exactly who took it.
+              note: `${what}${who ? ` · took by ${who}` : ""}`,
+              derived: true,
+              by: who,
+            }
+      );
+    }
+  }
+
+  // Newest first, the same order the panel already read in. Sorted on the
+  // date string because these are dates, not timestamps — ISO dates sort
+  // correctly as text, which is the one thing that makes this cheap.
+  const ledger: LedgerEntry[] = [...typedIn, ...derivedLines].sort((a, b) =>
+    a.date < b.date ? 1 : a.date > b.date ? -1 : 0
+  );
+
+  // ---- utang -----------------------------------------------------------
+  const receivables: Receivable[] = ((receivableRows ?? []) as {
+    id: string;
+    date: string;
+    customer: string | null;
+    phone: string | null;
+    amount: number;
+    amount_collected: number;
+    collected: boolean;
+    note: string | null;
+  }[]).map((r) => ({
+    id: r.id,
+    date: r.date,
+    customer: r.customer,
+    phone: r.phone,
+    amount: Number(r.amount) || 0,
+    collected: Number(r.amount_collected) || 0,
+    settled: r.collected,
+    note: r.note,
+  }));
+  const owed = receivables
+    .filter((r) => !r.settled)
+    .reduce((s, r) => s + (r.amount - r.collected), 0);
+
+  // ---- payback ---------------------------------------------------------
+  const assets: Asset[] = ((assetRows ?? []) as {
+    id: string;
+    name: string;
+    amount: number;
+    bought_on: string | null;
+    note: string | null;
+  }[]).map((a) => ({
+    id: a.id,
+    name: a.name,
+    amount: Number(a.amount) || 0,
+    boughtOn: a.bought_on,
+    note: a.note,
+  }));
+  const assetTotal = assets.reduce((s, a) => s + a.amount, 0);
+
+  let payback: MoneyPicture["payback"] = null;
+  const from = settingsRow?.payback_from ?? null;
+  if (from && assetTotal > 0) {
+    const [{ data: since0 }, { data: waste0 }] = await Promise.all([
+      supabase
+        .from("orders")
+        .select("date, revenue, cogs")
+        .gte("date", from)
+        .neq("status", "cancelled"),
+      supabase.from("waste").select("total_cost").gte("date", from),
+    ]);
+    const rows = (since0 ?? []) as { date: string; revenue: number; cogs: number }[];
+    const gross = rows.reduce(
+      (s, o) => s + (Number(o.revenue) || 0) - (Number(o.cogs) || 0),
+      0
+    );
+    const days = new Set(rows.map((o) => o.date)).size;
+    const w = ((waste0 ?? []) as { total_cost: number }[]).reduce(
+      (s, x) => s + (Number(x.total_cost) || 0),
+      0
+    );
+    const earned = gross - dailyOE * days - w;
+    payback = {
+      from,
+      earned,
+      pct: assetTotal > 0 ? Math.max(0, (earned / assetTotal) * 100) : 0,
+      paidOff: earned >= assetTotal,
+    };
+  }
+
+  return {
+    fixedCosts,
+    monthlyFixed,
+    openDays,
+    dailyOE,
+    marginRatio,
+    monthlyWasteRate,
+    breakEvenDaily,
+    avgDailyRevenue,
+    windowDays,
+    revenue,
+    cogs,
+    grossProfit,
+    oeForWindow,
+    wasteForWindow,
+    netProfit,
+    cash: { enabled: cashEnabled, onHand, startedOn, startedWith },
+    ledger,
+    receivables,
+    owed,
+    assets,
+    assetTotal,
+    payback,
+  };
+}

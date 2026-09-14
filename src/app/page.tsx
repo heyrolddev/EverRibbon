@@ -1,5 +1,5 @@
+import { duration, formatDate, money, shopToday } from "@/lib/format";
 import { brand, RAMPS, STEPS } from "../../config/index.ts";
-import { money, formatDate, duration, shopToday } from "../lib/format.ts";
 
 /*
  * A proof, not a homepage.

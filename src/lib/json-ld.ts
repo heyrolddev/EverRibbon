@@ -3,7 +3,7 @@
  *
  * `JSON.stringify` escapes quotes and backslashes but leaves "<" alone, and
  * an HTML parser does not care that it is reading JSON — it stops the script
- * at the first "</script>" it sees. Shop content reaches these blocks: dish
+ * at the first "</script>" it sees. Shop content reaches these blocks: product
  * names, opening notes, and review text a customer typed. A review of
  * "great</script><script>…" would close the tag early and have the rest of
  * that stranger's message parsed as markup on the shop's own homepage.

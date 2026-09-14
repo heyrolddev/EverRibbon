@@ -7,7 +7,7 @@
  *
  *     DATABASE_URL=postgres://... node scripts/check-schema.mjs
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 

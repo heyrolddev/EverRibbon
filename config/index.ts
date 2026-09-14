@@ -44,8 +44,8 @@ export function brandVars(b: BrandConfig = brand): string {
   // The two the stylesheet cannot decide for itself. See Roles in schema.ts.
   lines.push(`--accent-fill:${b.palette[b.roles.accentFill]}`);
   lines.push(`--on-accent:${b.palette[b.roles.onAccent]}`);
-  lines.push(`--font-display:${b.fonts.display}`);
-  lines.push(`--font-body:${b.fonts.body}`);
+  lines.push(`--font-display-stack:${b.fonts.display}`);
+  lines.push(`--font-body-stack:${b.fonts.body}`);
   lines.push(`--font-mono-stack:${b.fonts.mono}`);
   return `:root{${lines.join(";")}}`;
 }

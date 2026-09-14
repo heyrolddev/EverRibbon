@@ -11,7 +11,7 @@
  *
  *     node scripts/port.mjs <relative/path.ts> [more...]
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
 const FROM = process.env.PORT_FROM ?? "/home/user/heyrolddev/pepper-pan";
@@ -27,9 +27,63 @@ export const TOKENS = JSON.parse(readFileSync(join(TO, "scripts/token-map.json")
 
 const RAMPS_OLD = "brand|gold|jade|chili|ink|cream";
 
+/**
+ * The vocabulary, in every casing the code writes it.
+ *
+ * The schema was renamed in the database (see supabase/migrations), so the
+ * TypeScript has to follow or every query breaks. Longest first, because
+ * `meal_ingredients` must not be eaten by `meal_id`, and each entry is
+ * expanded to snake_case, camelCase and PascalCase because a codebase writes
+ * the same idea three ways: meal_id in a query, mealId in a prop, Meal in a
+ * type.
+ *
+ * `dish` is the odd one: it never named a table, only the English the
+ * interface used for a menu item. It becomes `product` too, so the screens
+ * stop telling a ribbon shop about its dishes.
+ */
+const WORDS = [
+  ["meal_ingredients", "product_materials"], ["meal_components", "product_components"],
+  ["meal_packaging", "product_packaging"], ["menu_categories", "catalog_categories"],
+  ["batch_ingredients", "production_run_materials"], ["ingredient_lots", "material_lots"],
+  ["consumption_log", "material_usage"], ["purchase_log", "purchases"],
+  ["waste_log", "waste"], ["produce_batch", "produce_run"],
+  ["batch_cost_per_unit", "production_run_cost_per_unit"],
+  ["consume_ingredient", "consume_material"], ["restore_ingredient", "restore_material"],
+  ["has_bought_meal", "has_bought_product"], ["batch_stock", "run_stock"],
+  ["meal_id", "product_id"], ["ingredient_id", "material_id"], ["batch_id", "production_run_id"],
+  ["meals", "products"], ["ingredients", "materials"], ["batches", "production_runs"],
+  ["dishes", "products"], ["dish", "product"],
+  ["meal", "product"], ["ingredient", "material"], ["batch", "production_run"],
+];
+
+const upperFirst = (w) => w[0].toUpperCase() + w.slice(1);
+const camel = (w) => w.split("_").map((p, i) => (i ? upperFirst(p) : p)).join("");
+const pascal = (w) => w.split("_").map(upperFirst).join("");
+
+/** snake_case, camelCase and PascalCase for each pair, longest first. */
+export const VOCAB = WORDS.flatMap(([a, b]) => [
+  [a, b], [camel(a), camel(b)], [pascal(a), pascal(b)],
+]).filter(([a], i, all) => all.findIndex(([x]) => x === a) === i)
+  .sort((x, y) => y[0].length - x[0].length);
+
+/** Just the words, for a file that is already here and only needs renaming. */
+export function renameVocabulary(source) {
+  let out = source;
+  for (const [a, b] of VOCAB) {
+    out = out.replace(new RegExp(`(?<![A-Za-z0-9_])${a}(?![A-Za-z0-9_])`, "g"), b);
+  }
+  return out;
+}
+
 export function port(source, relPath) {
   const notes = [];
   let out = source;
+
+  // 0. The vocabulary. Before anything else, because the colour map and the
+  //    money rules below do not care what a table is called.
+  for (const [a, b] of VOCAB) {
+    out = out.replace(new RegExp(`(?<![A-Za-z0-9_])${a}(?![A-Za-z0-9_])`, "g"), b);
+  }
 
   // 1. Colour tokens, in class strings and anywhere else they appear.
   out = out.replace(new RegExp(`\\b(${RAMPS_OLD})-(\\d{2,3})\\b`, "g"), (whole, ramp, step) => {
@@ -61,6 +115,30 @@ export function port(source, relPath) {
     (m, kind) => `new Intl.${kind}(brand.locale`);
   out = out.replace(/\.toLocaleString\("[a-z]{2}-[A-Z]{2}"/g, ".toLocaleString(brand.locale");
 
+  /*
+   * 4b. Two modules moved.
+   *
+   * format-date.ts exported exactly the four names src/lib/format.ts does, so
+   * it is a redirect. The money formatters used to live in the costing module
+   * and now live beside the dates, which means an import naming them has to be
+   * split rather than rewritten -- most files import a costing type from the
+   * same line.
+   */
+  out = out.replace(/from "@\/lib\/format-date"/g, 'from "@/lib/format"');
+  out = out.replace(
+    /import\s*\{([^}]*)\}\s*from\s*"@\/lib\/costing";/g,
+    (whole, names) => {
+      const all = names.split(",").map((n) => n.trim()).filter(Boolean);
+      const moved = all.filter((n) => /^(money|moneyRound)$/.test(n.replace(/^type\s+/, "")));
+      if (!moved.length) return whole;
+      const kept = all.filter((n) => !moved.includes(n));
+      const lines = [];
+      if (kept.length) lines.push(`import { ${kept.join(", ")} } from "@/lib/costing";`);
+      lines.push(`import { ${moved.join(", ")} } from "@/lib/format";`);
+      return lines.join("\n");
+    }
+  );
+
   // 5. Import paths: this repo keeps config outside src/.
   out = out.replace(/from "@\/lib\//g, 'from "@/lib/');
 
@@ -83,6 +161,8 @@ export function port(source, relPath) {
     [/₱/, "a currency symbol the script could not convert"],
     [/Asia\/[A-Za-z_]+|"[a-z]{2}-[A-Z]{2}"/, "a timezone or locale left in place"],
     [/Pepper Pan|PepperPan|pepper-pan/i, "the old shop's name"],
+    [/(?<![A-Za-z0-9_])(meals?|ingredients?|dish(es)?|batch(es)?|Meal|Ingredient|Dish|Batch)(?![A-Za-z0-9_])/,
+     "a word from the old trade the vocabulary map missed"],
   ]) {
     if (re.test(code)) notes.push(why);
   }
@@ -130,11 +210,43 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const files = process.argv.slice(2);
   if (!files.length) { console.error("usage: node scripts/port.mjs <relative/path.ts>..."); process.exit(1); }
   let flagged = 0;
-  for (const rel of files) {
+  /*
+   * Artwork that belongs to one shop and was deliberately left behind.
+   *
+   * A bulk run over "everything not here yet" reads a deleted file as one that
+   * has not been carried over, and cheerfully brings the wok back. Naming them
+   * is the difference between a decision and a file that keeps reappearing.
+   */
+  const DROPPED = new Set([
+    "src/components/pan-loader.tsx",   // a flame leaping out of a pan
+    "src/components/noodle-lift.tsx",  // chopsticks lifting noodles
+  ]);
+
+  const force = files.includes("--force");
+  for (const rel of files.filter((f) => f !== "--force")) {
+    if (DROPPED.has(rel)) {
+      console.log(`  - ${rel.padEnd(34)} SKIPPED: one shop's artwork, deliberately not carried over.`);
+      continue;
+    }
     const src = readFileSync(join(FROM, rel), "utf8");
     const { out, notes } = port(src, rel);
-    mkdirSync(dirname(join(TO, rel)), { recursive: true });
-    writeFileSync(join(TO, rel), out);
+    const target = join(TO, rel);
+
+    /*
+     * Never overwrite work a person has already done.
+     *
+     * Re-running the script over a file that was ported and then fixed by hand
+     * silently throws the fixes away, and the diff looks like a port rather
+     * than like a loss. It happened twice before this guard existed. A file
+     * that already matches what the script would produce is untouched work and
+     * safe to rewrite; anything else needs --force and a moment's thought.
+     */
+    if (existsSync(target) && readFileSync(target, "utf8") !== out && !force) {
+      console.log(`  - ${rel.padEnd(34)} SKIPPED: already here and edited since. --force to overwrite.`);
+      continue;
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, out);
     const tag = notes.length ? `NEEDS A LOOK: ${[...new Set(notes)].join("; ")}` : "clean";
     if (notes.length) flagged++;
     console.log(`${notes.length ? "!" : " "} ${rel.padEnd(34)} ${tag}`);

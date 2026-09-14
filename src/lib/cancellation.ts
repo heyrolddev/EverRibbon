@@ -10,7 +10,7 @@
 export const CANCEL_REASONS = [
   "Customer changed their mind",
   "Never collected",
-  "Ran out of an ingredient",
+  "Ran out of a material",
   "Rung up wrong",
   "Duplicate order",
   "Kitchen couldn't make it",
