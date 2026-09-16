@@ -75,6 +75,11 @@ const checks = [
    "select count(*) from pg_constraint where conname = 'orders_status_fkey' and contype = 'f'", "1",
    "A CHECK means adding a step needs a migration and a deploy."],
 
+  ["the four live screens are subscribed",
+   "select count(*) from pg_publication_tables where pubname='supabase_realtime' " +
+   "and tablename in ('orders','chat_messages','chat_threads','staff_shifts')", "4",
+   "Without these the order board, the tracker, the inbox and the shift list stop updating, silently."],
+
   ["no column is food-shaped either",
    "select count(*) from information_schema.columns where table_schema='public' " +
    "and (column_name like '%meal%' or column_name like '%ingredient%' or column_name like '%dish%')", "0",
