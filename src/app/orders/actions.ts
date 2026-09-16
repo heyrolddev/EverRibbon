@@ -1,5 +1,7 @@
 "use server";
 
+import { checkReply } from "@/lib/proofs";
+import { stepAfter, stepBackToShop } from "@/lib/order-statuses";
 import { cancellationKeys } from "@/lib/order-statuses";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { brand } from "../../../config/index.ts";
@@ -213,4 +215,87 @@ export async function submitPayment(
 
   revalidateOrders();
   return { error: null };
+}
+
+/**
+ * The customer's answer to a proof.
+ *
+ * The one place in this system where a customer changes an order's status,
+ * and it is right that they can: nothing is made until they say so, and a
+ * shop that has to notice an approval before acting on it has reintroduced
+ * the delay the proof was meant to remove.
+ *
+ * Row-level security is what actually enforces "yours, and only once" — the
+ * update policy cannot reach a proof that already has a decision, so an
+ * approval cannot be quietly turned into a rejection after the thing is made.
+ * The checks here exist to produce a sentence rather than a silent no-op.
+ */
+export async function decideProof(input: {
+  proofId: number;
+  decision: "approved" | "changes";
+  reply: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You need to sign in first." };
+
+  let reply: string | null = null;
+  if (input.decision === "changes") {
+    const checked = checkReply(input.reply);
+    if (!checked.ok) return { ok: false, error: checked.error };
+    reply = checked.reply;
+  }
+
+  const { data: proof, error: readError } = await supabase
+    .from("order_proofs")
+    .select("id, order_id, decision")
+    .eq("id", input.proofId)
+    .maybeSingle();
+
+  if (readError) return { ok: false, error: readError.message };
+  if (!proof) return { ok: false, error: "We couldn't find that proof." };
+  if (proof.decision) {
+    return { ok: false, error: "You've already answered this one." };
+  }
+
+  const { error } = await supabase
+    .from("order_proofs")
+    .update({ decision: input.decision, reply, decided_at: new Date().toISOString() })
+    .eq("id", input.proofId)
+    // Narrowed here as well as in the policy: two taps on a slow connection
+    // should settle the first one, not race.
+    .is("decision", null);
+
+  if (error) return { ok: false, error: error.message };
+
+  /*
+   * Move the order, in the shop's own vocabulary.
+   *
+   * Approved goes one step along the rail — the shop can start. Changes hand
+   * it back to the nearest step that is the shop's move, because a job
+   * waiting on a customer who has already replied is a job nobody is looking
+   * at.
+   */
+  const statuses = await getOrderStatuses();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("status")
+    .eq("id", proof.order_id)
+    .maybeSingle();
+
+  const from = String(order?.status ?? "");
+  const next =
+    input.decision === "approved"
+      ? stepAfter(statuses, from)
+      : stepBackToShop(statuses, from);
+
+  if (next && next !== from) {
+    await supabase.from("orders").update({ status: next }).eq("id", proof.order_id);
+  }
+
+  revalidatePath("/orders");
+  revalidatePath("/admin/orders");
+  return { ok: true };
 }

@@ -10,6 +10,8 @@ import { useOrderRealtime } from "@/lib/use-order-realtime";
 import { cancelMyOrder, submitPayment, updateMyOrder } from "@/app/orders/actions";
 import { LiveDotIcon } from "@/components/icons";
 import { OrderReviewPanel, type ReviewableItem } from "@/components/order-review-panel";
+import { ProofCard } from "@/components/proof-card";
+import type { Proof } from "@/lib/proofs";
 import {
   awaitingCustomer,
   findStatus,
@@ -60,6 +62,8 @@ export type TrackedOrder = {
   downpayment_confirmed_at: string | null;
   reviewable: ReviewableItem[];
   lines: TrackedLine[];
+  /** Photographs sent for approval. Empty for a shop that does not send them. */
+  proofs: Proof[];
 };
 
 /** The happy path, in order. `cancelled` deliberately sits outside it. */
@@ -284,6 +288,10 @@ function OrderCard({
           </p>
         </div>
       )}
+
+      {/* Above the lines and the money: until this is answered, nothing else
+          on the card is what the customer came to do. */}
+      {order.proofs.length > 0 && <ProofCard proofs={order.proofs} />}
 
       {cancelled && order.cancelled_reason && (
         <p className="px-6 py-4 text-sm text-ink-900/70">{order.cancelled_reason}</p>

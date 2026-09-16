@@ -1,3 +1,4 @@
+import type { Proof } from "@/lib/proofs";
 import { isFulfilled } from "@/lib/order-statuses";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { lineName } from "@/lib/order-lines";
@@ -120,6 +121,36 @@ export default async function OrdersPage() {
 
   const typedOrders = (orders ?? []) as unknown as Order[];
 
+  /*
+   * The proofs, in one query rather than one per order.
+   *
+   * Row-level security already restricts these to this customer's own orders,
+   * so there is nothing to filter here — and re-implementing that filter in
+   * the query is how the two rules start to disagree.
+   */
+  const { data: proofRows } = await supabase
+    .from("order_proofs")
+    .select("id, order_id, version, image_url, note, sent_at, decision, reply, decided_at")
+    .in("order_id", typedOrders.map((o) => o.id).length ? typedOrders.map((o) => o.id) : ["none"])
+    .order("version");
+
+  const proofsByOrder = new Map<string, Proof[]>();
+  for (const r of (proofRows ?? []) as Record<string, unknown>[]) {
+    const key = String(r.order_id);
+    const list = proofsByOrder.get(key) ?? [];
+    list.push({
+      id: Number(r.id),
+      version: Number(r.version),
+      imageUrl: String(r.image_url),
+      note: r.note == null ? null : String(r.note),
+      sentAt: String(r.sent_at),
+      decision: (r.decision as Proof["decision"]) ?? null,
+      reply: r.reply == null ? null : String(r.reply),
+      decidedAt: r.decided_at == null ? null : String(r.decided_at),
+    });
+    proofsByOrder.set(key, list);
+  }
+
   // Everything this customer has already rated, so a completed order shows
   // their existing stars rather than inviting a duplicate review.
   const { data: myReviewRows } = await supabase
@@ -188,6 +219,7 @@ export default async function OrdersPage() {
       price_at_sale: Number(l.price_at_sale),
       name: lineName(l),
     })),
+    proofs: proofsByOrder.get(String(o.id)) ?? [],
   }));
 
   return (

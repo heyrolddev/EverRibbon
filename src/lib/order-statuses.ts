@@ -224,6 +224,64 @@ export const workStartsAt = (rows: OrderStatusRow[]): OrderStatus | undefined =>
 export const handedOverAt = (rows: OrderStatusRow[]): OrderStatus | undefined =>
   fulfilledKeys(rows)[0];
 
+/**
+ * The step that means "a proof is with the customer, nothing is made yet".
+ *
+ * A gate that waits on the customer — and the LAST such gate, because a
+ * made-to-order shop has more than one. "Agreed, waiting on the deposit" is
+ * also a gate that waits on them; the proof is the one furthest along.
+ *
+ * Null for a shop with no such step, which is most of them. A kitchen does
+ * not send a photograph of your noodles for approval, and the proof panel
+ * simply does not appear.
+ */
+export const proofStep = (rows: OrderStatusRow[]): OrderStatusRow | null => {
+  const gates = [...rows]
+    .filter((r) => r.isOpen && r.isGate && r.awaitingCustomer)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  return gates.at(-1) ?? null;
+};
+
+/**
+ * The next step along the rail — where an approved proof sends the order.
+ *
+ * Null at the end of the rail, so an order cannot be advanced past done.
+ */
+export const stepAfter = (
+  rows: OrderStatusRow[],
+  from: OrderStatus
+): OrderStatus | null => {
+  const rail = railFor(rows, "pickup");
+  const at = railIndex(rail, from);
+  if (at < 0) return null;
+  return rail[at + 1]?.key ?? null;
+};
+
+/**
+ * The step to go back to when the ball comes back to the shop.
+ *
+ * A customer who asks for a change on a proof has not cancelled and has not
+ * approved — the job is simply the shop's again. Rather than naming a step,
+ * this walks back along the rail to the nearest one that is the shop's move,
+ * so it is right on any shop's own list.
+ *
+ * Falls back to the step it was given, because an order that cannot move is
+ * better than one that jumps somewhere nobody chose.
+ */
+export const stepBackToShop = (
+  rows: OrderStatusRow[],
+  from: OrderStatus
+): OrderStatus => {
+  const rail = railFor(rows, "pickup");
+  const at = railIndex(rail, from);
+  if (at < 0) return from;
+  for (let i = at - 1; i >= 0; i--) {
+    const step = rail[i];
+    if (step && step.isOpen && !step.awaitingCustomer) return step.key;
+  }
+  return from;
+};
+
 /** Open, and it is the shop's move. Everything else open is on the customer. */
 export const needsShop = (rows: OrderStatusRow[], key: OrderStatus): boolean =>
   rows.some((r) => r.key === key && r.isOpen && !r.awaitingCustomer);

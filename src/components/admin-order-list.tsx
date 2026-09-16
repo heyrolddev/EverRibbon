@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ticketOf } from "@/lib/tickets";
 import { alertEtaElapsed } from "@/app/admin/orders/actions";
 import { OrderStatusPicker } from "@/components/order-status-picker";
+import { ProofSender } from "@/components/proof-sender";
+import type { Proof } from "@/lib/proofs";
 import { EtaPicker } from "@/components/eta-picker";
 import { AdminSearch } from "@/components/admin-search";
 import { searchAllOrders } from "@/app/admin/orders/actions";
@@ -22,6 +24,7 @@ import {
   isCancellation,
   isFulfilled,
   needsShop,
+  proofStep,
 } from "@/lib/order-statuses";
 import { OrderBoard, type View } from "@/components/order-board";
 import { Foldable } from "@/components/foldable";
@@ -59,6 +62,8 @@ export type AdminOrder = {
   downpayment_amount: number;
   downpayment_confirmed_at: string | null;
   lines: { qty: number; price: number; name: string }[];
+  /** Photographs sent for approval, oldest first. */
+  proofs: Proof[];
   customer: {
     full_name: string | null;
     phone: string | null;
@@ -205,6 +210,11 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
           />
         </div>
       </div>
+
+      {/* Only for a shop that has a step meaning "with the customer, nothing
+          made yet". A kitchen has no such step and gets no panel, rather than
+          a panel that does nothing. */}
+      {proofStep(statuses) && <ProofSender orderId={o.id} proofs={o.proofs} />}
 
       <ul className="mt-4 flex flex-col gap-1 border-t border-ink-950/10 pt-3 text-sm">
         {o.lines.map((l, i) => (
