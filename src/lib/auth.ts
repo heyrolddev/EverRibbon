@@ -1,6 +1,8 @@
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { openKeys } from "@/lib/order-statuses";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ACTIVE_ORDER_STATUSES } from "@/lib/orders";
+
 import { isShopRole, roleCan, type Capability } from "@/lib/permissions";
 
 export type Profile = {
@@ -98,7 +100,7 @@ export async function countActiveOrders(): Promise<number> {
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("customer_id", user.id)
-      .in("status", ACTIVE_ORDER_STATUSES);
+      .in("status", openKeys(await getOrderStatuses()));
 
     return error ? 0 : (count ?? 0);
   } catch {

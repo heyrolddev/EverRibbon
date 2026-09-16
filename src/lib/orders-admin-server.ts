@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { AdminOrder } from "@/components/admin-order-list";
-import type { OrderStatus } from "@/lib/orders";
+import type { OrderStatus } from "@/lib/order-statuses";
 import {
   PAYMENT_STATUSES,
   type PaymentMethod,

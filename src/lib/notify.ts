@@ -1,9 +1,11 @@
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { labelOf, type OrderStatus } from "@/lib/order-statuses";
 import { moneyRound } from "./format.ts";
 import { brand } from "../../config/index.ts";
 import "server-only";
 import { ticketOf } from "@/lib/tickets";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { STATUS_LABELS, type OrderStatus } from "@/lib/orders";
+
 import { pushConfigured, pushToStaff, pushToUser } from "@/lib/push";
 
 /**
@@ -148,7 +150,7 @@ async function sendEmail(
         "",
         bodyFor(status, fulfillment, reason),
         "",
-        `Status: ${STATUS_LABELS[status]}`,
+        `Status: ${labelOf(await getOrderStatuses(), status)}`,
         `Order ${ref}`,
         "",
         `${brand.name} — ${brand.contact.street}, ${brand.contact.locality}`,

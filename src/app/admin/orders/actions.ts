@@ -1,4 +1,6 @@
 "use server";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { keysOf, type OrderStatus } from "@/lib/order-statuses";
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -7,7 +9,7 @@ import { notifyOrderStatus } from "@/lib/notify";
 import { syncStockForStatus } from "@/lib/stock-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushToStaff } from "@/lib/push";
-import { ORDER_STATUSES, type OrderStatus } from "@/lib/orders";
+
 import { PAYMENT_STATUSES, type PaymentStatus } from "@/lib/payments";
 import { NOT_ON_SHIFT, offShift } from "@/lib/shift-guard";
 import { cleanReason } from "@/lib/cancellation";
@@ -96,7 +98,7 @@ export async function setOrderStatus(
    */
   reason?: string
 ): Promise<{ error: string | null }> {
-  if (!ORDER_STATUSES.includes(status)) {
+  if (!keysOf(await getOrderStatuses()).includes(status)) {
     return { error: "Unknown status." };
   }
 

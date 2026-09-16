@@ -1,4 +1,5 @@
 import { moneyRound } from "@/lib/format";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { NotAllowed } from "@/components/not-allowed";
 import { can, getViewer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -31,6 +32,9 @@ async function getLedger(): Promise<{ rows: LedgerRow[]; error: string | null }>
 }
 
 export default async function AdminPaymentsPage() {
+  // The shop's own steps, fetched once and handed to the client components,
+  // which cannot ask for themselves.
+  const statuses = await getOrderStatuses();
   const viewer = await getViewer();
   // Hidden from the sidebar too, but hiding a link is not a permission:
   // a bookmark reaches this page all the same.
@@ -88,7 +92,7 @@ export default async function AdminPaymentsPage() {
 
       <PaymentsTabs
         waiting={waiting}
-        ledger={<PaymentLedger rows={rows} />}
+        ledger={<PaymentLedger rows={rows} statuses={statuses} />}
         settings={<PaymentSettingsForm initial={settings} />}
       />
     </div>

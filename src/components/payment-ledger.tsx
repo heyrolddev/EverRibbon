@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { AdminSearch } from "@/components/admin-search";
 import { Foldable } from "@/components/foldable";
 import { PaymentVerifier } from "@/components/payment-verifier";
-import { STATUS_LABELS, STATUS_TONES, type OrderStatus } from "@/lib/orders";
+import { labelOf, toneOf, toneClasses, type OrderStatus, type OrderStatusRow } from "@/lib/order-statuses";
 import {
   METHOD_LABEL,
   isOutstanding,
@@ -75,9 +75,9 @@ function bucketOf(row: LedgerRow): Exclude<Bucket, "all"> {
   return isOutstanding(row.payment_status) ? "owed" : "settled";
 }
 
-function Row({ row, startOpen }: { row: LedgerRow; startOpen: boolean }) {
+function Row({ row, startOpen, statuses }: { row: LedgerRow; startOpen: boolean; statuses: OrderStatusRow[] }) {
   const m = moneyState(row);
-  const tone = STATUS_TONES[row.status];
+  const tone = toneClasses(toneOf(statuses, row.status));
   const who = row.contact_name || "Walk-in";
   const stuck = row.status === "completed" && m.balance > 0;
 
@@ -86,13 +86,13 @@ function Row({ row, startOpen }: { row: LedgerRow; startOpen: boolean }) {
       startOpen={startOpen}
       chip={tone.chip}
       rail={tone.rail}
-      title={STATUS_LABELS[row.status]}
+      title={labelOf(statuses, row.status)}
       folded={
         <>
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${tone.chip}`}
           >
-            {STATUS_LABELS[row.status]}
+            {labelOf(statuses, row.status)}
           </span>
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-950">
             {who}
@@ -169,7 +169,15 @@ function Row({ row, startOpen }: { row: LedgerRow; startOpen: boolean }) {
   );
 }
 
-export function PaymentLedger({ rows }: { rows: LedgerRow[] }) {
+export function PaymentLedger({
+  rows,
+  statuses,
+}: {
+  rows: LedgerRow[];
+  /** The shop's own steps, from the database. Passed down rather than
+      imported, because a client component cannot ask. */
+  statuses: OrderStatusRow[];
+}) {
   const [bucket, setBucket] = useState<Bucket>("attention");
 
   const searchText = useMemo(
@@ -272,7 +280,7 @@ export function PaymentLedger({ rows }: { rows: LedgerRow[] }) {
                     // each row decides for itself rather than the tab deciding
                     // for all of them.
                     startOpen={bucketOf(r) !== "settled"}
-                  />
+                  statuses={statuses} />
                 ))}
               </ul>
             )}

@@ -19,18 +19,18 @@ BEGIN;
 DELETE FROM public.order_statuses
 WHERE key NOT IN (SELECT DISTINCT status FROM public.orders WHERE status IS NOT NULL);
 
-INSERT INTO public.order_statuses (key, label, sort_order, is_open, is_gate, delivery_only, tone, hint) VALUES
-  ('inquiry',       'Inquiry',       10, true,  false, false, 'ink',    'Someone asked. Nothing agreed yet.'),
-  ('quoted',        'Quoted',        20, true,  false, false, 'ink',    'A price is with the customer.'),
-  ('agreed',        'Agreed',        30, true,  true,  false, 'accent', 'Order, date and handover all settled. Waiting on the deposit.'),
-  ('deposit_paid',  'Deposit paid',  40, true,  false, false, 'ok',     'The deposit has arrived. Work can start.'),
-  ('proof_sent',    'Proof sent',    50, true,  true,  false, 'accent', 'With the customer. Nothing is printed until they approve.'),
-  ('approved',      'Approved',      60, true,  false, false, 'ok',     'Approved. Build it.'),
-  ('in_production', 'In production', 70, true,  false, false, 'brand',  'Being made now.'),
-  ('ready',         'Ready',         80, true,  false, false, 'ok',     'Finished. Waiting for the balance or for collection.'),
-  ('balance_paid',  'Balance paid',  90, true,  false, false, 'ok',     'Paid in full.'),
-  ('delivered',     'Delivered',    100, false, false, false, 'ink',    'Handed over.'),
-  ('cancelled',     'Cancelled',    110, false, false, false, 'bad',    'Did not happen.')
+INSERT INTO public.order_statuses (key, label, sort_order, is_open, is_gate, delivery_only, tone, commits_stock, hint) VALUES
+  ('inquiry',       'Inquiry',       10, true,  false, false, 'ink', false,    'Someone asked. Nothing agreed yet.'),
+  ('quoted',        'Quoted',        20, true,  false, false, 'ink', false,    'A price is with the customer.'),
+  ('agreed',        'Agreed',        30, true,  true,  false, 'accent', false, 'Order, date and handover all settled. Waiting on the deposit.'),
+  ('deposit_paid',  'Deposit paid',  40, true,  false, false, 'ok', true,     'The deposit has arrived. Work can start.'),
+  ('proof_sent',    'Proof sent',    50, true,  true,  false, 'accent', true, 'With the customer. Nothing is printed until they approve.'),
+  ('approved',      'Approved',      60, true,  false, false, 'ok', true,     'Approved. Build it.'),
+  ('in_production', 'In production', 70, true,  false, false, 'brand', true,  'Being made now.'),
+  ('ready',         'Ready',         80, true,  false, false, 'ok', true,     'Finished. Waiting for the balance or for collection.'),
+  ('balance_paid',  'Balance paid',  90, true,  false, false, 'ok', true,     'Paid in full.'),
+  ('delivered',     'Delivered',    100, false, false, false, 'ink', true,    'Handed over.'),
+  ('cancelled',     'Cancelled',    110, false, false, false, 'bad', false,    'Did not happen.')
 ON CONFLICT (key) DO UPDATE SET
   label = EXCLUDED.label,
   sort_order = EXCLUDED.sort_order,
@@ -38,6 +38,7 @@ ON CONFLICT (key) DO UPDATE SET
   is_gate = EXCLUDED.is_gate,
   delivery_only = EXCLUDED.delivery_only,
   tone = EXCLUDED.tone,
+  commits_stock = EXCLUDED.commits_stock,
   hint = EXCLUDED.hint;
 
 COMMIT;

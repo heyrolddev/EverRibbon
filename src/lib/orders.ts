@@ -1,136 +1,20 @@
-export const ORDER_STATUSES = [
-  "pending",
-  "confirmed",
-  "preparing",
-  "ready",
-  "out_for_delivery",
-  "completed",
-  "cancelled",
-] as const;
-
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
-
 /**
- * What the shop calls each step.
+ * What an order is, apart from which step it is on.
  *
- * `out_for_delivery` only makes sense once the food has left the stall, so
- * `statusesFor` hides it from pickup orders rather than offering the shop a
- * step it can never legitimately use.
+ * The steps themselves moved to src/lib/order-statuses.ts and to the database
+ * behind it. What is left here is the part that does not vary by shop: how an
+ * order is handed over, and what counts as a sane quantity.
+ *
+ * The status list used to live at the top of this file as a constant array,
+ * with a second array naming which of them were "active" and a third mapping
+ * each to its colours. Adding a step meant editing three places and hoping.
  */
-export const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: "Pending",
-  confirmed: "Confirmed",
-  preparing: "Preparing",
-  ready: "Ready",
-  out_for_delivery: "On the way",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-export function statusesFor(fulfillment: string): readonly OrderStatus[] {
-  return fulfillment === "delivery"
-    ? ORDER_STATUSES
-    : ORDER_STATUSES.filter((s) => s !== "out_for_delivery");
-}
-
-/** Orders the customer is still waiting on. */
-export const ACTIVE_ORDER_STATUSES: OrderStatus[] = [
-  "pending",
-  "confirmed",
-  "preparing",
-  "ready",
-  "out_for_delivery",
-];
-
 /**
- * One colour per status, defined once and used everywhere it appears.
+ * How the order reaches the customer, in the shop's words.
  *
- * The hierarchy is deliberate and it is the whole point of the palette: the
- * five statuses where the shop still owes someone food are fully saturated,
- * and the two closed ones are deliberately quiet. A completed order is not
- * competing for attention with an order that's on the wok — so on a screen
- * showing both, the eye lands on the live one without having to read a word.
- *
- * Within the live five the colour also tracks the heat: gold while it's
- * waiting on the owner, orange once accepted, red on the fire, green when it's
- * ready, ink once it has left the stall.
- */
-export type StatusTone = {
-  /** Filled chip — for the selected tab and the badge on a card. */
-  chip: string;
-  /** Just the colour — for the dot beside an unselected tab. */
-  dot: string;
-  /** Border colour, for the rail down the left edge of a folded row. */
-  rail: string;
-  /** Does the shop still owe someone food? */
-  live: boolean;
-  /** What this queue means, in the owner's terms. */
-  hint: string;
-};
-
-export const STATUS_TONES: Record<OrderStatus, StatusTone> = {
-  pending: {
-    chip: "bg-brand-700 text-paper-50",
-    dot: "bg-accent-200",
-    rail: "border-accent-200",
-    live: true,
-    hint: "New in. Nobody has accepted these yet.",
-  },
-  confirmed: {
-    chip: "bg-warn-500 text-paper-50",
-    dot: "bg-warn-500",
-    rail: "border-warn-500",
-    live: true,
-    hint: "Accepted, not started. Give each one an ETA.",
-  },
-  preparing: {
-    chip: "bg-brand-700 text-paper-50",
-    dot: "bg-brand-700",
-    rail: "border-brand-700",
-    live: true,
-    hint: "On the wok right now.",
-  },
-  ready: {
-    chip: "bg-ok-600 text-paper-50",
-    dot: "bg-ok-600",
-    rail: "border-ok-600",
-    live: true,
-    hint: "Cooked and waiting — for a rider, or for the customer.",
-  },
-  out_for_delivery: {
-    chip: "bg-ink-900 text-paper-100",
-    dot: "bg-ink-900",
-    rail: "border-ink-900",
-    live: true,
-    hint: "With a rider. Mark completed once it lands.",
-  },
-  completed: {
-    // Green, because completed is the good ending and grey read as "filed
-    // away". A lighter green than Ready's saturated jade, deliberately: those
-    // two sit beside each other in the tab strip and their rails run down the
-    // same column of rows, and "cooked, waiting to be handed over" must never
-    // be mistaken for "done and gone".
-    chip: "bg-ok-100 text-ok-800",
-    dot: "bg-ok-500",
-    rail: "border-ok-500",
-    live: false,
-    hint: "Finished. Anything still owed is flagged in red.",
-  },
-  cancelled: {
-    chip: "bg-brand-700/15 text-brand-800",
-    dot: "bg-brand-700/50",
-    rail: "border-brand-700/40",
-    live: false,
-    hint: "Called off. Open a row for the reason.",
-  },
-};
-
-/**
- * How the food leaves the shop.
- *
- * Dine-in is not a smaller kind of pickup: it's the one case where nothing is
- * packed, which is what the packaging costing turns on. Everything else goes
- * out in a box and is charged for it.
+ * Unlike the steps, these three are structural: the code branches on them --
+ * a delivery has a fee and an address, a dine-in has neither -- so they are
+ * not something a shop redefines without the code knowing.
  */
 const FULFILLMENT_LABELS: Record<string, string> = {
   pickup: "Take-out",

@@ -1,6 +1,8 @@
 import "server-only";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { openKeys } from "@/lib/order-statuses";
 import { createClient } from "@/lib/supabase/server";
-import { ACTIVE_ORDER_STATUSES } from "@/lib/orders";
+
 import { OUTSTANDING_PAYMENT_STATUSES } from "@/lib/payments";
 
 /**
@@ -62,12 +64,16 @@ export async function getAdminBadges(): Promise<AdminBadges> {
       return n ?? 0;
     };
 
+    // One list for all four counts, fetched before the fan-out rather than
+    // inside a callback that cannot await.
+    const open = openKeys(await getOrderStatuses());
+
     const [orders, inbox, payments, staff] = await Promise.all([
       count("orders", () =>
         db
           .from("orders")
           .select("id", { count: "exact", head: true })
-          .in("status", ACTIVE_ORDER_STATUSES)
+          .in("status", open)
       ),
       count("inbox", () =>
         db

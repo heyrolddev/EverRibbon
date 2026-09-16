@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setOrderStatus } from "@/app/admin/orders/actions";
-import { STATUS_LABELS, statusesFor, type OrderStatus } from "@/lib/orders";
+import { statusesFor, type OrderStatus, type OrderStatusRow } from "@/lib/order-statuses";
 import { moneyLine, type MoneyState } from "@/lib/payments";
 import { hqTitle } from "@/lib/hq-theme";
 import { CANCEL_REASONS, REASON_LIMIT } from "@/lib/cancellation";
@@ -13,6 +13,7 @@ export function OrderStatusPicker({
   status,
   fulfillment,
   money,
+  statuses,
 }: {
   orderId: string;
   status: OrderStatus;
@@ -20,6 +21,8 @@ export function OrderStatusPicker({
   fulfillment: string;
   /** What's been paid, so completing an unpaid order can ask first. */
   money?: MoneyState;
+  /** The shop's own steps, from the database. */
+  statuses: OrderStatusRow[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -82,9 +85,9 @@ export function OrderStatusPicker({
         onChange={(e) => attempt(e.target.value as OrderStatus)}
         className="rounded-full border-2 border-ink-950/15 bg-paper-50 px-4 py-2 text-sm font-bold text-ink-950 outline-none transition-colors focus:border-brand-700 disabled:opacity-60"
       >
-        {statusesFor(fulfillment).map((s) => (
-          <option key={s} value={s}>
-            {STATUS_LABELS[s]}
+        {statusesFor(statuses, fulfillment).map((s) => (
+          <option key={s.key} value={s.key}>
+            {s.label}
           </option>
         ))}
       </select>

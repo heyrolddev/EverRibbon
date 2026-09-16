@@ -2,11 +2,16 @@
 
 import { motion } from "motion/react";
 import {
-  ORDER_STATUSES,
-  STATUS_LABELS,
-  STATUS_TONES,
+  findStatus,
+  isOpen,
+  keysOf,
+  labelOf,
+  toneOf,
+  toneClasses,
   type OrderStatus,
-} from "@/lib/orders";
+  type OrderStatusRow,
+} from "@/lib/order-statuses";
+
 
 /**
  * The seven queues a food stall actually runs, as one strip you can read
@@ -38,16 +43,20 @@ export function OrderBoard({
   view,
   onView,
   counts,
+  statuses,
 }: {
   view: View;
   onView: (v: View) => void;
   /** How many orders each tab would show, given the search that's applied. */
   counts: Record<View, number>;
+  /** The shop's own steps, from the database. Passed down rather than
+      imported, because a client component cannot ask. */
+  statuses: OrderStatusRow[];
 }) {
-  const tabs: View[] = ["open", ...ORDER_STATUSES];
+  const tabs: View[] = ["open", ...keysOf(statuses)];
 
   const hint =
-    view === "open" ? OPEN_TONE.hint : STATUS_TONES[view].hint;
+    view === "open" ? OPEN_TONE.hint : (findStatus(statuses, view)?.hint ?? "");
 
   return (
     <div className="flex flex-col gap-3">
@@ -64,13 +73,13 @@ export function OrderBoard({
           {tabs.map((tab) => {
             const active = view === tab;
             const n = counts[tab] ?? 0;
-            const tone = tab === "open" ? OPEN_TONE : STATUS_TONES[tab];
-            const label = tab === "open" ? "Open" : STATUS_LABELS[tab];
+            const tone = tab === "open" ? OPEN_TONE : toneClasses(toneOf(statuses, tab));
+            const label = tab === "open" ? "Open" : labelOf(statuses, tab);
             // Completed and Cancelled are quiet colours by design — right for
             // a chip sitting among live orders, too faint for the tab you are
             // standing on. Selected always reads as selected; those two borrow
             // the dark fill rather than their own.
-            const quiet = tab !== "open" && !STATUS_TONES[tab].live;
+            const quiet = tab !== "open" && !isOpen(statuses, tab);
             const selectedChip = quiet ? "bg-ink-950 text-accent-200" : tone.chip;
 
             return (

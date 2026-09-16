@@ -1,6 +1,7 @@
 import "server-only";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { committedKeys } from "@/lib/order-statuses";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { OrderStatus } from "@/lib/orders";
 
 /**
  * Moving stock, from the app's side.
@@ -25,15 +26,8 @@ import type { OrderStatus } from "@/lib/orders";
  * sale is created at `completed`, already past this line, so it applies the
  * instant it is rung up.
  */
-const COMMITTED_STATUSES: OrderStatus[] = [
-  "confirmed",
-  "preparing",
-  "ready",
-  "completed",
-];
-
-export function isCommitted(status: OrderStatus): boolean {
-  return COMMITTED_STATUSES.includes(status);
+export async function isCommitted(status: string): Promise<boolean> {
+  return committedKeys(await getOrderStatuses()).includes(status);
 }
 
 /**
@@ -89,13 +83,13 @@ export async function reverseOrderStock(orderId: string): Promise<boolean> {
  */
 export async function syncStockForStatus(
   orderId: string,
-  status: OrderStatus
+  status: string
 ): Promise<void> {
   if (status === "cancelled") {
     await reverseOrderStock(orderId);
     return;
   }
-  if (isCommitted(status)) {
+  if (await isCommitted(status)) {
     await applyOrderStock(orderId);
   }
   // `pending` is the only remaining case: nothing has been committed yet, and

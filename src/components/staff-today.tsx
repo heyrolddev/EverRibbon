@@ -2,7 +2,8 @@ import { formatDateTime } from "@/lib/format";
 import Link from "next/link";
 import { LiveOrdersBanner } from "@/components/live-orders-banner";
 import { StatTile } from "@/components/stat-tile";
-import { STATUS_LABELS, STATUS_TONES, type OrderStatus } from "@/lib/orders";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { labelOf, toneOf, toneClasses } from "@/lib/order-statuses";
 import { hqTitle } from "@/lib/hq-theme";
 
 export type ServiceOrder = {
@@ -27,7 +28,7 @@ export type ShortDish = { name: string; makeable: number };
  * is ready to hand over, and what has run out. Those were the four things
  * somebody at the counter had to find by opening three other screens.
  */
-export function StaffToday({
+export async function StaffToday({
   orders,
   waitingLeads,
   shortDishes,
@@ -41,6 +42,8 @@ export function StaffToday({
   name: string;
   onShift: boolean;
 }) {
+  // A server component, so it can ask for the shop's own steps itself.
+  const statuses = await getOrderStatuses();
   const by = (s: string) => orders.filter((o) => o.status === s);
   const waiting = by("pending");
   const accepted = [...by("confirmed"), ...by("preparing")];
@@ -148,7 +151,7 @@ export function StaffToday({
         ) : (
           <ul className="mt-5 flex flex-col gap-2">
             {queue.map((o) => {
-              const tone = STATUS_TONES[o.status as OrderStatus];
+              const tone = toneClasses(toneOf(statuses, o.status));
               return (
                 <li
                   key={o.id}
@@ -170,7 +173,7 @@ export function StaffToday({
                       tone?.chip ?? "bg-ink-900 text-paper-50"
                     }`}
                   >
-                    {STATUS_LABELS[o.status as OrderStatus] ?? o.status}
+                    {labelOf(statuses, o.status)}
                   </span>
                 </li>
               );

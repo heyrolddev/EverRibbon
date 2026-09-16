@@ -9,7 +9,17 @@ import { EtaPicker } from "@/components/eta-picker";
 import { AdminSearch } from "@/components/admin-search";
 import { searchAllOrders } from "@/app/admin/orders/actions";
 import { PaymentVerifier } from "@/components/payment-verifier";
-import { ACTIVE_ORDER_STATUSES, STATUS_LABELS, STATUS_TONES, ORDER_STATUSES, type OrderStatus, fulfillmentLabel } from "@/lib/orders";
+import { fulfillmentLabel } from "@/lib/orders";
+import {
+  isOpen,
+  keysOf,
+  labelOf,
+  openKeys,
+  toneOf,
+  toneClasses,
+  type OrderStatus,
+  type OrderStatusRow,
+} from "@/lib/order-statuses";
 import { OrderBoard, type View } from "@/components/order-board";
 import { Foldable } from "@/components/foldable";
 import { moneyLine, moneyState, type PaymentMethod, type PaymentPlan, type PaymentStatus } from "@/lib/payments";
@@ -56,7 +66,7 @@ export type AdminOrder = {
 };
 
 
-function OrderCard({ order: o }: { order: AdminOrder }) {
+function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderStatusRow[] }) {
   const p = o.customer;
   const payment = moneyState(o);
   return (
@@ -70,10 +80,10 @@ function OrderCard({ order: o }: { order: AdminOrder }) {
                 not mean reading twenty dropdowns. */}
             <span
               className={`rounded-full px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide ${
-                STATUS_TONES[o.status].chip
+                toneClasses(toneOf(statuses, o.status)).chip
               }`}
             >
-              {STATUS_LABELS[o.status]}
+              {labelOf(statuses, o.status)}
             </span>
             {/* The ticket first. It is what the receipt says, what the
                 activity log points at and what somebody types into the search
@@ -183,6 +193,7 @@ function OrderCard({ order: o }: { order: AdminOrder }) {
             </span>
           )}
           <OrderStatusPicker
+            statuses={statuses}
             orderId={o.id}
             status={o.status}
             fulfillment={o.fulfillment}
@@ -272,30 +283,30 @@ function OrderCard({ order: o }: { order: AdminOrder }) {
  * is to see the whole queue at once and then reach into one. Scanning is the
  * common case; acting is the deliberate one, and it costs a tap.
  */
-function OrderRow({ order: o }: { order: AdminOrder }) {
+function OrderRow({ order: o, statuses }: { order: AdminOrder; statuses: OrderStatusRow[] }) {
   const payment = moneyState(o);
   const owed = payment.balance > 0;
-  const tone = STATUS_TONES[o.status];
+  const tone = toneClasses(toneOf(statuses, o.status));
   const who = o.contact_name || o.customer?.full_name || ticketOf(o.ticket);
 
   return (
     <Foldable
       chip={tone.chip}
       rail={tone.rail}
-      title={STATUS_LABELS[o.status]}
+      title={labelOf(statuses, o.status)}
       folded={
         <>
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${tone.chip}`}
           >
-            {STATUS_LABELS[o.status]}
+            {labelOf(statuses, o.status)}
           </span>
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-950">
             {who}
           </span>
           {/* Two things survive the fold, because they're the two reasons to
               open a row: it's late, or it hasn't been paid for. */}
-          {o.eta_minutes != null && tone.live && (
+          {o.eta_minutes != null && isOpen(statuses, o.status) && (
             <EtaCountdown
               minutes={o.eta_minutes}
               from={o.eta_set_at}
@@ -317,7 +328,7 @@ function OrderRow({ order: o }: { order: AdminOrder }) {
         </>
       }
     >
-      <OrderCard order={o} />
+      <OrderCard order={o} statuses={statuses} />
     </Foldable>
   );
 }
@@ -326,12 +337,15 @@ export function AdminOrderList({
   orders,
   loaded,
   total,
+  statuses,
 }: {
   orders: AdminOrder[];
   /** How many the board asked for. */
   loaded: number;
   /** How many exist. The difference is the whole reason for the archive. */
   total: number;
+  /** The shop's own steps, from the database. */
+  statuses: OrderStatusRow[];
 }) {
   /**
    * The archive, for when the board's slice does not contain the answer.
@@ -394,20 +408,21 @@ export function AdminOrderList({
         // in the shop. A tab that says 40 and then shows 2 is a tab lying
         // about what clicking it does.
         const counts = { open: 0 } as Record<View, number>;
-        for (const st of ORDER_STATUSES) counts[st] = 0;
+        const openStatuses = openKeys(statuses);
+        for (const st of keysOf(statuses)) counts[st] = 0;
         for (const o of filtered) {
-          counts[o.status] += 1;
-          if (ACTIVE_ORDER_STATUSES.includes(o.status)) counts.open += 1;
+          counts[o.status] = (counts[o.status] ?? 0) + 1;
+          if (openStatuses.includes(o.status)) counts.open = (counts.open ?? 0) + 1;
         }
 
         const shown =
           view === "open"
-            ? filtered.filter((o) => ACTIVE_ORDER_STATUSES.includes(o.status))
+            ? filtered.filter((o) => openStatuses.includes(o.status))
             : filtered.filter((o) => o.status === view);
 
         if (localMiss) {
           return (
-            <ArchiveResults
+            <ArchiveResults statuses={statuses}
               query={q}
               archive={archive}
               onLoad={setArchive}
@@ -419,7 +434,7 @@ export function AdminOrderList({
 
         return (
           <div className="flex flex-col gap-5">
-            <OrderBoard view={view} onView={setView} counts={counts} />
+            <OrderBoard view={view} onView={setView} counts={counts} statuses={statuses} />
 
             {/* A list that silently stops is a list somebody eventually
                 mistakes for the whole thing. Search reaches the rest. */}
@@ -441,12 +456,12 @@ export function AdminOrderList({
                   ? `Nothing in this queue matches \u201C${query.trim()}\u201D.`
                   : view === "open"
                     ? "Nothing waiting — you're all caught up. \u{1F389}"
-                    : `No orders are ${STATUS_LABELS[view].toLowerCase()} right now.`}
+                    : `No orders are ${labelOf(statuses, view).toLowerCase()} right now.`}
               </p>
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {shown.map((o) => (
-                  <OrderRow key={o.id} order={o} />
+                  <OrderRow key={o.id} order={o} statuses={statuses} />
                 ))}
               </ul>
             )}
@@ -470,7 +485,9 @@ function ArchiveResults({
   onLoad,
   total,
   loaded,
+  statuses,
 }: {
+  statuses: OrderStatusRow[];
   query: string;
   archive: { for: string; rows: AdminOrder[] | null } | null;
   onLoad: (a: { for: string; rows: AdminOrder[] | null }) => void;
@@ -537,7 +554,7 @@ function ArchiveResults({
         — older than the newest {loaded.toLocaleString()} on the board.
       </p>
       {rows.map((o) => (
-        <OrderRow key={o.id} order={o} />
+        <OrderRow key={o.id} order={o} statuses={statuses} />
       ))}
     </div>
   );
