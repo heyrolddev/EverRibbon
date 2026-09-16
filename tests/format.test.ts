@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { money, moneyRound, quantity, duration, shopToday, formatDate } from "../src/lib/format.ts";
+import { addDays, money, moneyRound, quantity, duration, shopToday, formatDate } from "../src/lib/format.ts";
 import { brand } from "../config/index.ts";
 
 test("money puts the sign outside the symbol", () => {
@@ -50,4 +50,17 @@ test("dates format in the shop's zone and locale", () => {
   const s = formatDate("2026-09-13T23:30:00Z");
   assert.ok(s.length > 0);
   assert.doesNotMatch(s, /Invalid/);
+});
+
+test("addDays walks the calendar without reading the clock", () => {
+  assert.equal(addDays("2026-09-16", 13), "2026-09-29");
+  assert.equal(addDays("2026-09-16", 0), "2026-09-16");
+  assert.equal(addDays("2026-09-16", -1), "2026-09-15");
+  // Month and year boundaries, and a leap day, which is where naive
+  // arithmetic on a date string goes wrong.
+  assert.equal(addDays("2026-01-31", 1), "2026-02-01");
+  assert.equal(addDays("2026-12-31", 1), "2027-01-01");
+  assert.equal(addDays("2028-02-28", 1), "2028-02-29");
+  // Rubbish in, the same day back — a calendar that throws is worse.
+  assert.equal(addDays("not a day", 5), "not a day");
 });

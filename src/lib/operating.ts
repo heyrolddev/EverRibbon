@@ -142,3 +142,73 @@ export async function capacityOn(day: string, op?: Operating) {
     full: booked >= ceiling,
   };
 }
+
+export type CapacityDay = {
+  /** ISO date, in the shop's own calendar. */
+  day: string;
+  booked: number;
+  ceiling: number;
+  free: number;
+  /** Working that day, and nothing left. */
+  isFull: boolean;
+  /** Not working that day at all. */
+  isClosed: boolean;
+  orders: number;
+};
+
+/**
+ * A stretch of days, and what is left in each.
+ *
+ * One query rather than one per day: a fortnight drawn by calling
+ * `capacityOn` fourteen times is fourteen round trips to render one screen.
+ *
+ * Closed and full are kept apart deliberately. A rest day has no minutes and
+ * no work, which arithmetic alone reads as "full" -- and a calendar that tells
+ * an owner Sunday is full is telling them something untrue about a day they
+ * chose not to work.
+ */
+export async function capacityRange(from: string, to: string): Promise<CapacityDay[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("capacity_calendar", { p_from: from, p_to: to });
+  if (error || !Array.isArray(data)) return [];
+
+  return data.map((r: Record<string, unknown>) => ({
+    day: String(r.day),
+    booked: num(r.booked, 0),
+    ceiling: num(r.ceiling, 0),
+    free: num(r.free, 0),
+    isFull: Boolean(r.is_full),
+    isClosed: Boolean(r.is_closed),
+    orders: num(r.orders, 0),
+  }));
+}
+
+/**
+ * Whether a date can take this much more work, and what to say if not.
+ *
+ * Returns a surcharge rather than a refusal for a date inside the rush window:
+ * a near date is a conversation, and a calendar that simply blocks it loses
+ * the order to whoever will pick up the phone.
+ */
+export function verdictFor(
+  day: CapacityDay | undefined,
+  minutesWanted: number,
+  op: Operating,
+  daysAway: number
+): { ok: boolean; reason?: string; rushFeePercent?: number } {
+  if (!day) return { ok: false, reason: "That date is outside the calendar." };
+  if (day.isClosed) return { ok: false, reason: "The shop is not working that day." };
+  if (minutesWanted > day.free) {
+    return {
+      ok: false,
+      reason:
+        day.free <= 0
+          ? "That day is fully booked."
+          : `Only ${Math.floor(day.free)} minutes are left that day.`,
+    };
+  }
+  if (op.rushWindowDays > 0 && daysAway <= op.rushWindowDays && op.rushFeePercent > 0) {
+    return { ok: true, rushFeePercent: op.rushFeePercent };
+  }
+  return { ok: true };
+}

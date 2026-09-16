@@ -37,6 +37,7 @@ const ACCENTS: [prefix: string, colour: string][] = [
   ["/admin/faq", "var(--color-warn-500)"],
 
   ["/admin/hours", "var(--color-ink-900)"],
+  ["/admin/capacity", "var(--color-ink-900)"],
   ["/admin/delivery", "var(--color-ink-900)"],
   ["/admin/payments", "var(--color-ink-900)"],
   ["/admin/alerts", "var(--color-ink-900)"],

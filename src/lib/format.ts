@@ -140,3 +140,18 @@ export function shopMidday(day: string): string | null {
   if (Number.isNaN(at.getTime())) return null;
   return shopToday(at) === day ? at.toISOString() : null;
 }
+
+/**
+ * A calendar day, n days on. Pure: same input, same answer, no clock.
+ *
+ * Written against midday UTC rather than midnight because midnight plus a
+ * whole number of days can land on the wrong side of a daylight-saving
+ * boundary, and a calendar that skips a day once a year is worse than one that
+ * is simply wrong.
+ */
+export function addDays(day: string, n: number): string {
+  const at = new Date(`${day}T12:00:00Z`);
+  if (Number.isNaN(at.getTime())) return day;
+  at.setUTCDate(at.getUTCDate() + Math.round(n));
+  return at.toISOString().slice(0, 10);
+}

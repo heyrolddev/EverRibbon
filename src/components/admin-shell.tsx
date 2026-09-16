@@ -103,6 +103,7 @@ const GROUPS: Group[] = [
     title: "Set up once",
     items: [
       { href: "/admin/hours", label: "Hours", icon: "◷", needs: "settings" },
+      { href: "/admin/capacity", label: "Capacity", icon: "◑", needs: "settings" },
       { href: "/admin/delivery", label: "Delivery", icon: "→", needs: "settings" },
       { href: "/admin/payments", label: "Payments", icon: brand.currency.symbol, badge: "payments", needs: "settings" },
       { href: "/admin/alerts", label: "Alerts", icon: "🔔", needs: "settings" },
