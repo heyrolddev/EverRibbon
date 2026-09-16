@@ -40,6 +40,35 @@ rather than splitting the file.
 **The CLI.** `supabase db push` applies everything in `supabase/migrations/`
 in order, and records what it has applied so a second run is a no-op.
 
+## The dialog the SQL editor shows
+
+Supabase inspects each query before running it and will warn twice. Both
+warnings are correct about what they see and wrong about what it means,
+because the editor reads one file at a time and this schema is ten.
+
+**"Creates tables without enabling Row Level Security."** True of
+`0001_schema.sql` on its own: it creates the tables, and `0006` turns RLS on
+and adds the seventy-seven policies. The editor cannot see file six.
+
+Choose **Run and enable RLS**. It reaches the same place — checked by running
+both ways and comparing: 41 tables, 77 policies, zero tables without RLS
+either way — and it is safer in between. Choosing "without" leaves every table
+readable by anon and authenticated keys for as long as it takes you to get to
+`0006`, and if you stop for lunch halfway, that window is lunch.
+
+**"Includes destructive operations."** In `0001` this is two `delete from`
+statements *inside function bodies* — one prunes spent stock lots, one trims
+the error log. They are part of the functions being defined, not data being
+removed now.
+
+You will see it again on two files, and both are deliberate:
+
+- `0007` drops the old CHECK constraint on `orders.status`, which is the whole
+  point of that migration — the statuses become rows instead.
+- `supabase/seeds/made-to-order-statuses.sql` deletes the default counter
+  statuses before inserting the made-to-order ones. It only deletes statuses no
+  order is using, so on a live shop it removes nothing that matters.
+
 ## Afterwards
 
 Two keys from Project Settings → API go in `.env.local`:
