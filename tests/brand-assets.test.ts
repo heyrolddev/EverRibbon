@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assetsFrom, markFor, CONFIG_ASSETS } from "../src/lib/brand-assets.ts";
+import {
+  assetsFrom,
+  markFor,
+  needsMeasuring,
+  CONFIG_ASSETS,
+} from "../src/lib/brand-assets.ts";
 
 /**
  * A logo is the one asset whose absence every page is designed to survive, so
@@ -32,12 +37,34 @@ test("clearing the upload returns to the config, not to blank", () => {
   assert.deepEqual(cleared.light, CONFIG_ASSETS.light);
 });
 
-test("a URL with no dimensions is not a wordmark", () => {
-  // It would render at whatever the browser guessed and shift the header as
-  // it loaded — on every first visit, on every page.
-  const half = assetsFrom({ ...row, wordmark_width: null });
-  assert.deepEqual(half.light, CONFIG_ASSETS.light);
-  assert.deepEqual(assetsFrom({ ...row, wordmark_height: 0 }).light, CONFIG_ASSETS.light);
+test("a URL with no dimensions is a wordmark waiting to be measured", () => {
+  /*
+   * This asserted the opposite until the first owner was asked for the pixel
+   * size of their logo and answered "just copy the other shop's numbers" —
+   * which would have declared a 2.92:1 box around a square mark. The number
+   * IS the aspect ratio, so a wrong one is worse than none.
+   *
+   * The file knows. The server reads it from the header on the next render
+   * and stores it, and until then the mark draws from its own ratio and the
+   * header settles once.
+   */
+  const pasted = assetsFrom({ ...row, wordmark_width: null, wordmark_height: null });
+  assert.equal(pasted.light?.src, "https://example.test/light.png");
+  assert.equal(pasted.light?.width, null);
+  assert.ok(needsMeasuring(pasted.light));
+});
+
+test("half a size is no size — one dimension describes no rectangle", () => {
+  const half = assetsFrom({ ...row, wordmark_height: null });
+  assert.equal(half.light?.src, "https://example.test/light.png");
+  assert.equal(half.light?.width, null, "the lone width is discarded, not kept");
+  assert.equal(half.light?.height, null);
+  assert.ok(needsMeasuring(half.light));
+});
+
+test("a measured mark needs no measuring", () => {
+  assert.equal(needsMeasuring(assetsFrom(row).light), false);
+  assert.equal(needsMeasuring(null), false, "nothing to measure is not pending");
 });
 
 test("whitespace is not a URL", () => {

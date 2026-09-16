@@ -36,6 +36,24 @@ export function addressLine(): string {
     .join(", ");
 }
 
+/**
+ * Where "Open in maps" should go.
+ *
+ * A shop's own map listing when it has one — addressed by its id, so it
+ * carries the shop's hours, photographs and reviews. Otherwise a search for
+ * the address it typed, which is honest about what is known: the town and the
+ * street are facts the shop gave, and letting the map work out the rest is
+ * better than a coordinate nobody measured.
+ *
+ * Null only when there is no address at all, and the button then is not drawn.
+ */
+export function mapsHref(): string | null {
+  if (brand.contact.mapUrl) return brand.contact.mapUrl;
+  const address = addressLine();
+  if (!address) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
 /** Just the part the heading has not already said. */
 export function streetLine(): string | null {
   const { street, locality } = brand.contact;

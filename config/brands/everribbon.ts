@@ -35,12 +35,12 @@ export const everribbon: BrandConfig = {
   fulfillment: "made_to_order",
 
   contact: {
-    street: "#18 F. Carlos St., Balungao",
+    street: "Purok 2, F. Carlos Street, Balungao",
     locality: "Calumpit",
     region: "Bulacan",
     country: "PH",
-    phone: "+63 947 353 3060",
-    phoneHref: "+639473533060",
+    phone: "+63 955 941 8558",
+    phoneHref: "+639559418558",
     priceRange: "\u20b1\u20b1",
     // No pin yet. The ones that were here belonged to the shop this config
     // was scaffolded from and pointed at a different province — which is the

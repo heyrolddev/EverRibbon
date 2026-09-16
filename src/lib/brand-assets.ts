@@ -10,9 +10,17 @@ import { brand } from "../../config/index.ts";
 
 export type Wordmark = {
   src: string;
-  /** The artwork's own pixels, so the space is reserved before it loads. */
-  width: number;
-  height: number;
+  /**
+   * The artwork's own pixels, so the space is reserved before it loads — or
+   * null for the brief window between a URL being pasted and the server
+   * reading the file's header.
+   *
+   * Null is a worse state than known, and a far better one than wrong: a
+   * declared ratio that does not match the file is a mark drawn squashed, on
+   * every page, forever.
+   */
+  width: number | null;
+  height: number | null;
 };
 
 export type BrandAssets = {
@@ -40,13 +48,22 @@ const mark = (
   height: unknown
 ): Wordmark | null => {
   const url = typeof src === "string" ? src.trim() : "";
+  if (!url) return null;
   const w = Number(width);
   const h = Number(height);
-  // All three or nothing. A URL with no dimensions renders at whatever the
-  // browser guesses and shifts the header as it loads.
-  if (!url || !(w > 0) || !(h > 0)) return null;
-  return { src: url, width: Math.round(w), height: Math.round(h) };
+  // A size only counts when both halves are real. One without the other
+  // describes no rectangle.
+  const known = w > 0 && h > 0;
+  return {
+    src: url,
+    width: known ? Math.round(w) : null,
+    height: known ? Math.round(h) : null,
+  };
 };
+
+/** A mark whose file has not been looked at yet. */
+export const needsMeasuring = (m: Wordmark | null): boolean =>
+  Boolean(m && (m.width === null || m.height === null));
 
 /**
  * A settings row, as artwork.

@@ -84,6 +84,24 @@ export function Logo({
     );
   }
 
+  // A file whose header the server has not read yet. A plain <img> rather
+  // than next/image, which requires dimensions it does not have: the browser
+  // works the ratio out from the file itself, so the mark is drawn correctly
+  // from the first frame. What is lost is the reserved space, so the header
+  // settles once — which lasts until the next page render fills the size in.
+  if (mark.width === null || mark.height === null) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={mark.src}
+        alt={brand.name}
+        width={width}
+        className={className}
+        style={{ height: "auto" }}
+      />
+    );
+  }
+
   return (
     <Image
       src={mark.src}

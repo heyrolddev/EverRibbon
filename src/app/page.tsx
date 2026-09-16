@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { brand } from "../../config/index.ts";
-import { siteUrl, streetLine } from "@/lib/site";
+import { mapsHref, siteUrl, streetLine } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 import { money } from "@/lib/format";
 import { isConfigured } from "@/lib/auth";
@@ -406,11 +406,12 @@ export default async function Home() {
               >
                 {brand.contact.phone}
               </a>
-              {/* Only once somebody has dropped a real pin. A map link that
-                  opens on the wrong town is worse than no link at all. */}
-              {brand.contact.mapUrl && (
+              {/* The shop's listing when it has one, a search for its own
+                  address when it does not. What is never drawn is a link
+                  built on a coordinate nobody measured. */}
+              {mapsHref() && (
                 <a
-                  href={brand.contact.mapUrl}
+                  href={mapsHref()!}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-full px-6 py-3 text-sm font-bold ring-1 ring-paper-100/30 transition-colors hover:bg-paper-100/10"

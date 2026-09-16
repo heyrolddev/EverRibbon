@@ -21,7 +21,14 @@
 -- ==========================================================================
 --
 -- Upload the files to Storage first (bucket `everribbon`), then copy each
--- public URL from the file's "Get URL" menu.
+-- public URL from the file's "Get URL" menu. That is all — no pixel sizes.
+-- The server reads the size out of the file's own header the first time a
+-- page renders, and stores it.
+--
+-- (It used to ask for width and height. The first answer back was "just copy
+-- the other shop's numbers", which would have declared a 2.92:1 box around a
+-- square mark. The number IS the aspect ratio, so a wrong one is worse than
+-- none — and the file knows it anyway.)
 --
 -- Two slots, because one file cannot serve both grounds. Metallic gold
 -- measures about 2.3 to 1 against this site's cream — below the 4.5 a person
@@ -35,24 +42,15 @@
 -- Fill in only the one you have. The dark slot falls back to the light one,
 -- and with neither the shop's name is set in its own display face instead —
 -- which is a supported state, not a broken one.
---
--- WIDTH AND HEIGHT ARE THE ARTWORK'S OWN PIXELS, not the size it is drawn at.
--- Storage shows them when you click the file; so does your phone's gallery,
--- and so does right-click → Properties → Details on a computer. Without them
--- the page cannot reserve the space and the header jumps as the logo loads,
--- on every first visit, on every page — which is why the database refuses a
--- URL that arrives without them.
 
 UPDATE public.shop_settings SET
-  -- ↓↓↓ the DARK mark, for light backgrounds
-  wordmark_url        = NULL,   -- 'https://YOUR-PROJECT.supabase.co/storage/v1/object/public/everribbon/...'
-  wordmark_width      = NULL,   -- e.g. 1200
-  wordmark_height     = NULL,   -- e.g. 400
+  -- ↓ the GOLD mark, for dark backgrounds
+  wordmark_dark_url =
+    'https://blvfphsvbvtghtjcgxda.supabase.co/storage/v1/object/public/everribbon/EverRibbon_Final-no_bg.png',
 
-  -- ↓↓↓ the GOLD mark, for dark backgrounds
-  wordmark_dark_url    = NULL,  -- 'https://YOUR-PROJECT.supabase.co/storage/v1/object/public/everribbon/...'
-  wordmark_dark_width  = NULL,  -- e.g. 1200
-  wordmark_dark_height = NULL   -- e.g. 400
+  -- ↓ the DARK mark, for light backgrounds. Leave NULL until there is one —
+  --   the shop's name is set in Bodoni in the meantime, which is legible.
+  wordmark_url = NULL
 WHERE id = 1;
 
 

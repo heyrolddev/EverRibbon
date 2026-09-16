@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { can, getViewer } from "@/lib/auth";
 import { checkMedia, IMAGE_TYPES, MEDIA_BUCKET } from "@/lib/media";
 import { assetsFrom, type BrandAssets } from "@/lib/brand-assets";
+import { measureRemote } from "@/lib/brand-assets-server";
 
 /**
  * The shop's own artwork, uploaded by the shop.
@@ -84,20 +85,30 @@ export async function saveWordmark(
   }
 
   const url = input.url?.trim() || null;
-  const w = Number(input.width);
-  const h = Number(input.height);
+  let w = Number(input.width);
+  let h = Number(input.height);
 
-  // The database says the same thing, and says it last. This is here so the
-  // owner gets a sentence rather than a constraint name.
+  // The browser measured it before uploading. When it could not — or when the
+  // URL was pasted rather than uploaded — the file's own header is read here
+  // instead, so nobody is ever asked for a number they would have to go and
+  // look up.
   if (url && !(w > 0 && h > 0)) {
-    return { ok: false, error: "That image did not report a size. Try another file." };
+    const size = await measureRemote(url);
+    if (size) {
+      w = size.width;
+      h = size.height;
+    }
   }
+  const measured = w > 0 && h > 0;
 
   const prefix = input.ground === "dark" ? "wordmark_dark" : "wordmark";
+  // A URL whose size could not be read is still saved. The mark renders from
+  // its own file; only the reserved space is lost, and the next render tries
+  // to measure it again.
   const patch = {
     [`${prefix}_url`]: url,
-    [`${prefix}_width`]: url ? Math.round(w) : null,
-    [`${prefix}_height`]: url ? Math.round(h) : null,
+    [`${prefix}_width`]: url && measured ? Math.round(w) : null,
+    [`${prefix}_height`]: url && measured ? Math.round(h) : null,
   };
 
   const supabase = createAdminClient();
@@ -112,7 +123,7 @@ export async function saveWordmark(
     return {
       ok: false,
       error: error.message.includes("column")
-        ? "Run migration 0015 in the Supabase SQL editor first."
+        ? "Run migrations 0015 and 0018 in the Supabase SQL editor first."
         : error.message,
     };
   }
