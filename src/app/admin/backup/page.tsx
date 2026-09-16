@@ -60,7 +60,7 @@ const FILES: BackupFile[] = [
   {
     kind: "recipes.csv",
     label: "Recipes",
-    what: "Every product and production_run broken down into what goes into it.",
+    what: "Every product and batch broken down into what goes into it.",
     when: "The hardest thing here to rebuild from memory. Keep a copy.",
     tables: ["product_materials", "production_run_materials"],
   },

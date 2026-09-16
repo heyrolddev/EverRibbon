@@ -363,11 +363,11 @@ export async function adjustStock(input: {
 }
 
 /* ------------------------------------------------------------------ */
-/* ProductionRuns                                                             */
+/* Batches                                                             */
 /* ------------------------------------------------------------------ */
 
 /**
- * Cook a production_run.
+ * Cook a batch.
  *
  * Consumes the recipe and adds the yield, in one Postgres call — thirteen
  * materials for Black Pepper Sauce alone, and a failure part-way through
@@ -383,9 +383,9 @@ export async function produceRun(input: {
   multiplier: number;
 }): Promise<Result & { cost?: number }> {
   const viewer = await requireStock();
-  if (!viewer) return { error: "Only shop staff can record a production_run." };
+  if (!viewer) return { error: "Only shop staff can record a batch." };
   if (await offShift(viewer)) return { error: NOT_ON_SHIFT };
-  if (!(input.multiplier > 0)) return { error: "How many production_runs?" };
+  if (!(input.multiplier > 0)) return { error: "How many batches?" };
 
   const supabase = createAdminClient();
   const { data: production_run } = await supabase
@@ -393,7 +393,7 @@ export async function produceRun(input: {
     .select("name, yield_qty, yield_unit")
     .eq("id", input.productionRunId)
     .maybeSingle();
-  if (!production_run) return { error: "That production_run no longer exists." };
+  if (!production_run) return { error: "That batch no longer exists." };
 
   const { data, error } = await supabase.rpc("produce_run", {
     p_batch_id: input.productionRunId,
@@ -414,7 +414,7 @@ export async function produceRun(input: {
 }
 
 /**
- * Replace what goes into a production_run, in one go.
+ * Replace what goes into a batch, in one go.
  *
  * Rewritten wholesale rather than diffed line by line: a recipe is edited as
  * a whole thing on screen, and reconciling adds, edits and removes against
@@ -436,7 +436,7 @@ export async function saveBatchRecipe(input: {
     .select("name")
     .eq("id", input.productionRunId)
     .maybeSingle();
-  if (!production_run) return { error: "That production_run no longer exists." };
+  if (!production_run) return { error: "That batch no longer exists." };
 
   const { error: clearError } = await supabase
     .from("production_run_materials")
@@ -464,7 +464,7 @@ export async function saveBatchRecipe(input: {
   return { error: null };
 }
 
-/** Same, for a product. `refType` is "inv" for a material, "production_run" for a production_run. */
+/** Same, for a product. `refType` is "inv" for a material, "production_run" for a batch. */
 export async function saveMealRecipe(input: {
   productId: string;
   lines: { refType: "inv" | "production_run"; refId: string; qty: number }[];
@@ -598,7 +598,7 @@ export async function recordWaste(input: {
     .select("id, name, yield_unit, run_stock")
     .eq("id", input.sourceId)
     .maybeSingle();
-  if (!production_run) return { error: "That production_run no longer exists." };
+  if (!production_run) return { error: "That batch no longer exists." };
 
   const { data: perUnit } = await supabase.rpc("production_run_cost_per_unit", {
     p_batch_id: production_run.id,

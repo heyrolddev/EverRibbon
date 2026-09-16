@@ -62,7 +62,7 @@ export async function loadCostBook(): Promise<CostBook> {
   const failed = [
     ing.error && "materials",
     bat.error && "production_runs",
-    batIng.error && "production_run recipes",
+    batIng.error && "batch recipes",
     mea.error && "products",
     meaIng.error && "product recipes",
     meaComp.error && "combos",

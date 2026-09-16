@@ -24,7 +24,7 @@ import type { BrandConfig } from "../schema.ts";
 export const everribbon: BrandConfig = {
   key: "everribbon",
   name: "EverRibbon",
-  tagline: "Ribbon flowers that keep",
+  tagline: "Where every ribbon tells a story",
   description:
     "Hand-made ribbon flower bouquets and foil-printed ribbon for graduations, weddings and birthdays. Made to order in Pampanga.",
 
@@ -48,6 +48,69 @@ export const everribbon: BrandConfig = {
   },
 
   socials: [],
+
+  /**
+   * A ribbon shop sells to people planning one day months out, so the strip
+   * says what can be ordered and how long it takes — not what is fresh today.
+   */
+  copy: {
+    catalogue: "Shop",
+    loading: "Tying the ribbon…",
+    badge: "MADE TO ORDER",
+    strip: [
+      "Ribbon flower bouquets",
+      "Foil-printed ribbon",
+      "Graduations & weddings",
+      "Nationwide shipping",
+      "Custom orders welcome",
+    ],
+    catalogueBlurb:
+      "ribbon flower bouquets, foil-printed ribbon for graduations, weddings and birthdays",
+    businessNoun: "a ribbon printer and bouquet maker",
+    termsClause: {
+      title: "Handmade, and the colours",
+      body:
+        "Every flower is folded by hand, so no two bouquets are identical and " +
+        "small differences in shape and fullness are part of what you are " +
+        "buying. Ribbon colour can also shift slightly between deliveries of " +
+        "stock, and a screen shows colour differently again. If an exact " +
+        "shade matters — matching a gown or a school colour — say so before " +
+        "you order and we will check the roll against it first.",
+    },
+    keywords: [
+      "ribbon flower bouquet Philippines",
+      "ribbon flowers Pampanga",
+      "personalized ribbon printing",
+      "foil printed ribbon Philippines",
+      "graduation bouquet Pampanga",
+      "wedding ribbon Philippines",
+      "handmade ribbon flowers",
+      "bouquet na hindi nalalanta",
+      "ribbon bouquet Apalit",
+      "customized ribbon printing Pampanga",
+    ],
+  },
+
+  schema: {
+    // Not a Restaurant, and not the generic Store either: a maker that sells
+    // what it makes is a HomeGoodsStore to schema.org, which is the type the
+    // gift and decor results are drawn from.
+    type: "HomeGoodsStore",
+    catalogue: "OfferCatalog",
+    extras: {},
+  },
+
+  // No wordmark file in the repo yet. The mark exists — a gold ribbon drawn as
+  // an infinity loop over a script wordmark — but it is drawn for a dark
+  // ground, and this site's header is cream in the light theme, where metallic
+  // gold measures 2.28 against the paper. So it needs either a transparent
+  // export sitting on a dark plate or a second light-ground version; until one
+  // of those lands the name is set in Bodoni, which is legible on both.
+  //
+  // To switch: drop the file at public/brand/everribbon/logo.png and replace
+  // this with { src: "/brand/everribbon/logo.png", width: W, height: H } using
+  // the artwork's real pixel size.
+  wordmark: null,
 
   palette: {
     "brand-50": "#FCF5E4", "brand-100": "#F7EAC9", "brand-200": "#EDD79E", "brand-300": "#DFBF6A", "brand-400": "#C9A227", "brand-500": "#B48E00",

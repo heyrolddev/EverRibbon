@@ -85,18 +85,18 @@ export function NewMealForm({ categories }: { categories: MenuCategory[] }) {
       </div>
       {/* Asked for at the point the product is created, not left until later.
           "You can add a description after creating it" is how seventy-three
-          products end up on a menu with nothing but a name — and a name alone
-          tells a first-time customer nothing about what Ji Pai or XLB is. */}
+          products end up in a catalogue with nothing but a name — and a name
+          on its own tells a first-time customer nothing about what it is. */}
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         rows={2}
         maxLength={160}
-        placeholder="What is it? e.g. Crispy fried chicken cutlet, Taiwanese street-style"
+        placeholder="What is it? One line, in the customer's words"
         className={fieldClass}
       />
       <p className="-mt-1 text-xs text-ink-900/45">
-        Shown under the name on the menu. {160 - description.length} characters
+        Shown under the name. {160 - description.length} characters
         left.
       </p>
       {error && (

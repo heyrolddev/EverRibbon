@@ -7,10 +7,10 @@ import { BRANDS, resolveBrand } from "../config/index.ts";
 /**
  * The rule that makes this a template instead of one shop's website.
  *
- * `src/` may read the config. It may not contain a shop's name, its currency
- * symbol, its timezone, its locale, or a colour. Those five things are what
- * every business changes, and every one of them is cheap to inline and
- * expensive to extract later — the system this one grew from accumulated 115
+ * `src/` may read the config. It may not contain a shop's name, its words,
+ * its address, its currency symbol, its timezone, its locale, or a colour.
+ * Those are what every business changes, and every one of them is cheap to
+ * inline and expensive to extract later — the system this one grew from accumulated 115
  * brand strings across 54 files, 18 hardcoded timezones and six separate
  * copies of the same money formatter, none of which were a decision.
  *
@@ -70,8 +70,37 @@ function banned(): { re: RegExp; why: string; prose: boolean }[] {
     // Banned in prose too: a comment about one shop is wrong in every other.
     out.push({ re: new RegExp(esc(b.name), "i"), prose: true,
       why: `the shop name "${b.name}" — read it from config` });
+
+    // The shop's own words. These are the ones that got through the first
+    // time: a marquee of five claims in the footer, "Firing up the pan…"
+    // under the loading mark, a pill on the share card. None of them says
+    // the shop's name, so the rule above never saw them, and the second
+    // shop rendered the first shop's copy on every page.
+    const words: [string, string][] = [
+      [b.tagline, "tagline"],
+      [b.description, "description"],
+      [b.copy.catalogue, "copy.catalogue"],
+      [b.copy.loading, "copy.loading"],
+      [b.copy.badge, "copy.badge"],
+      ...b.copy.strip.map((line, i) => [line, `copy.strip[${i}]`] as [string, string]),
+      [b.contact.street, "contact.street"],
+      [b.contact.phone, "contact.phone"],
+      [b.contact.phoneHref, "contact.phoneHref"],
+    ];
+    for (const [text, where] of words) {
+      // One word is not a leak — "Menu" and "Shop" are English, and banning
+      // them would ban the routes. Two or more is a sentence someone wrote
+      // about one business.
+      if (text.trim().split(/\s+/).length < 2 && !/\d/.test(text)) continue;
+      out.push({ re: new RegExp(esc(text.trim()), "i"), prose: true,
+        why: `${where} — read it from config, not from this file` });
+    }
     out.push({ re: new RegExp(esc(b.currency.symbol)), prose: false,
       why: `the currency symbol "${b.currency.symbol}" — use money() from src/lib/format` });
+    // The ISO code walked past the symbol rule twice: structured data says
+    // priceCurrency: "PHP", and no ₱ appears anywhere near it.
+    out.push({ re: new RegExp(`["'\`]${esc(b.currency.code)}["'\`]`), prose: false,
+      why: `the currency code "${b.currency.code}" — read brand.currency.code` });
     out.push({ re: new RegExp(esc(b.timeZone)), prose: false,
       why: `the timezone "${b.timeZone}" — the formatters in src/lib/format already pin it` });
     out.push({ re: new RegExp(`["'\`]${esc(b.locale)}["'\`]`), prose: false,

@@ -52,6 +52,60 @@ export const pepperpan: BrandConfig = {
     { name: "TikTok", href: "https://www.tiktok.com/@pepper.pan.taiwan", handle: "@pepper.pan.taiwan" },
   ],
 
+  /** The five lines that used to be hardcoded in three separate components. */
+  copy: {
+    catalogue: "Menu",
+    loading: "Firing up the pan\u2026",
+    badge: "MADE FRESH DAILY",
+    strip: [
+      "Black Pepper Noodles",
+      "Made Fresh Daily",
+      "Free Coffee Dine-In",
+      "Giant Ji Pai",
+      "Taiwan Milktea",
+    ],
+    catalogueBlurb:
+      "Taiwan-style black pepper noodles, Ji Pai chicken, rice products and milktea",
+    businessNoun: "a food stall",
+    termsClause: {
+      title: "Allergies",
+      body:
+        "We cook everything in one small kitchen. Peanuts, soy, wheat, eggs, " +
+        "shellfish and sesame are all in regular use, and we cannot promise " +
+        "any product is free of traces of them. If you have a serious " +
+        "allergy, please ring us before ordering rather than relying on the " +
+        "notes box.",
+    },
+    keywords: [
+      "Taiwanese food Apalit",
+      "Taiwan street food Pampanga",
+      "black pepper noodles",
+      "black pepper noodles Apalit",
+      "peppery noodles Pampanga",
+      "Ji Pai",
+      "Ji Pai chicken Apalit",
+      "milktea Apalit",
+      "food delivery Apalit Pampanga",
+      "pagkain sa Apalit",
+      "masarap na pagkain Apalit",
+      "New Apalit Public Market food",
+    ],
+  },
+
+  schema: {
+    type: "Restaurant",
+    catalogue: "Menu",
+    // The one property a Restaurant has that no other type does, and the one
+    // a "taiwanese food near me" result is matched on.
+    extras: {
+      servesCuisine: ["Taiwanese", "Asian", "Noodles"],
+      acceptsReservations: false,
+    },
+  },
+
+  // Source art is 7329 x 2511 once trimmed.
+  wordmark: { src: "/brand/pepperpan/logo.png", width: 7329, height: 2511 },
+
   palette: {
     "brand-50": "#FFF3F1", "brand-100": "#FFE4DF", "brand-200": "#FFCAC2", "brand-300": "#FFA89C", "brand-400": "#FF8072", "brand-500": "#FF463B",
     "brand-600": "#DC221F", "brand-700": "#B91313", "brand-800": "#890004", "brand-900": "#5F0001", "brand-950": "#3B0101",   // anchor #B91313 at 700

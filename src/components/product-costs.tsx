@@ -174,7 +174,7 @@ export function DishCosts({
   failed,
 }: {
   products: DishRow[];
-  /** Every material and production_run a line can point at, priced. */
+  /** Every material and batch a line can point at, priced. */
   options: RecipeOption[];
   /** False when nothing has sold yet, so the quadrants would be meaningless. */
   classified: boolean;

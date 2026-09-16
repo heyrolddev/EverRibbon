@@ -101,7 +101,11 @@ export function Marquee({
     >
       {items.map((item, i) => (
         <span key={i} className="flex items-center">
-          <span className="px-6">{item}</span>
+          {/* A line that wraps is not scrolling any more — on a narrow phone
+              a three-word claim became three stacked lines and the strip grew
+              to four times its height. The track is wider than the screen by
+              design; only the text inside it must refuse to break. */}
+          <span className="whitespace-nowrap px-6">{item}</span>
           <span className="opacity-60">{separator}</span>
         </span>
       ))}

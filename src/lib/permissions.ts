@@ -35,7 +35,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const ROLE_BLURBS: Record<Role, string> = {
   owner: "Everything. Prices, money, the books, and who works here.",
   manager:
-    "Runs a service without seeing the books. Can restock, cook production_runs, log waste, mark a product sold out and post promos — but not change a price or see what anything earns.",
+    "Runs a service without seeing the books. Can restock, cook batches, log waste, mark a product sold out and post promos — but not change a price or see what anything earns.",
   staff:
     "The counter and the orders. Sees what stock is left and can log waste. No prices, no costs, no takings.",
   customer: "Not shop staff — an ordinary customer account.",
@@ -61,7 +61,7 @@ export const CAPABILITIES = [
   /** Write off something that was thrown away. */
   "waste",
   /**
-   * Restock, cycle-count, cook a production_run, edit a recipe.
+   * Restock, cycle-count, cook a batch, edit a recipe.
    *
    * Carries material purchase prices with it, necessarily: you cannot
    * record a delivery without saying what it cost, and the forms pre-fill

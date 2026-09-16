@@ -6,18 +6,23 @@ import { getDeliverySettings } from "@/lib/delivery-server";
 import { getPublicReviews } from "@/lib/reviews-server";
 import { isConfigured } from "@/lib/auth";
 import { DAY_NAMES } from "@/lib/hours";
+import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/payments";
 
 /**
  * What Google needs before it will show the shop as a place rather than a page.
  *
- * A stall's customers search "taiwanese food apalit" and "milktea near me", and
- * the result that wins is the one showing hours, a phone number and stars. None
- * of that comes from the visible page — it comes from this block, and without
- * it the site competes as a plain blue link.
+ * A small shop's customers search for the thing and the town — and the result
+ * that wins is the one showing hours, a phone number and stars. None of that
+ * comes from the visible page; it comes from this block, and without it the
+ * site competes as a plain blue link.
  *
- * Every value is read from the shop's own data, so the hours Google shows are
- * the hours the owner actually set. A schema that drifts from reality is worse
- * than none: it sends people to a closed stall.
+ * What kind of business this is comes from the config, not from here. The type
+ * decides which category the shop competes in, and every shop competes in a
+ * different one.
+ *
+ * Every other value is read from the shop's own data, so the hours Google shows
+ * are the hours the owner actually set. A schema that drifts from reality is
+ * worse than none: it sends people to a closed door.
  */
 export async function ShopSchema() {
   const url = siteUrl();
@@ -43,17 +48,18 @@ export async function ShopSchema() {
 
   const schema = {
     "@context": "https://schema.org",
-    "@type": "Restaurant",
-    "@id": `${url}/#restaurant`,
+    "@type": brand.schema.type,
+    // A stable anchor whatever the type is, so the catalogue block can point
+    // back at this one and the two read as a single business.
+    "@id": `${url}/#business`,
     name: SHOP.name,
     description: SHOP.description,
     url,
     telephone: SHOP.phone,
     priceRange: SHOP.priceRange,
-    servesCuisine: ["Taiwanese", "Asian", "Noodles"],
-    // More than one, because a place result is a picture as much as a name.
-    // The poster is a frame of the hero video and the story shot is the room
-    // itself — between them a customer sees the food and where they'd eat it.
+    ...brand.schema.extras,
+    // More than one, because a place result is a picture as much as a name:
+    // between them a customer sees what is sold and where.
     image: [`${url}/opengraph-image`, `${url}/hero-poster.jpg`],
     address: {
       "@type": "PostalAddress",
@@ -105,11 +111,15 @@ export async function ShopSchema() {
         }
       : {}),
 
-    // Answers a question people search: "do they take GCash?"
-    paymentAccepted: "Cash, GCash",
-    currenciesAccepted: "PHP",
-    hasMenu: `${url}/menu`,
-    acceptsReservations: false,
+    // Answers a question people search: "do they take GCash?". These are the
+    // methods the system supports, not a fact about one shop.
+    paymentAccepted: PAYMENT_METHODS.map((m) => METHOD_LABEL[m]).join(", "),
+    currenciesAccepted: brand.currency.code,
+    // A Restaurant has a menu; every other type has a catalogue of products.
+    // Naming the wrong property does not degrade the block, it voids it.
+    ...(brand.schema.catalogue === "Menu"
+      ? { hasMenu: `${url}/menu` }
+      : { hasOfferCatalog: { "@id": `${url}/menu#catalogue` } }),
     ...(openingHours?.length ? { openingHoursSpecification: openingHours } : {}),
     // Only claimed when it's true — a rating invented out of nothing is the
     // fastest way to have every rich result for this site suppressed.

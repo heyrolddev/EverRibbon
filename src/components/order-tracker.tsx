@@ -1,4 +1,5 @@
 "use client";
+import { brand } from "../../config/index.ts";
 import { formatDateTime, formatDateTimeFull, money } from "@/lib/format";
 
 import { useState } from "react";
@@ -90,7 +91,7 @@ const STEP_COPY: Record<string, { label: string; blurb: string }> = {
 function readyBlurb(fulfillment: string): string {
   return fulfillment === "delivery"
     ? "Ready and waiting for a rider. They'll call or text you when they're close — keep your phone nearby. 📱"
-    : "Ready for pickup! We're in front of Palengkeni (New Apalit Public Market), beside Osave.";
+    : `Ready for pickup! We're at ${brand.contact.street}, ${brand.contact.locality}.`;
 }
 
 

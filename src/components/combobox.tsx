@@ -8,7 +8,7 @@ export type ComboOption = { value: string; label: string; hint?: string };
  * A picker you can type into.
  *
  * A native `<select>` is fine for five options. This shop has 91 materials
- * and 26 production_runs in one list, and finding "T.O/ Solo Rice/Noodles/Jipai" in a
+ * and 26 batches in one list, and finding "T.O/ Solo Rice/Noodles/Jipai" in a
  * scrolling dropdown means reading past a hundred near-identical names — the
  * exact place a wrong pick becomes a wrong recipe, silently.
  *

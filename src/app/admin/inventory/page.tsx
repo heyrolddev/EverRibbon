@@ -39,14 +39,14 @@ export default async function AdminInventoryPage() {
     await loadCostBook();
 
   // What to buy and what is about to go off. Needs the cost book first, since
-  // both are worked out against the same material and production_run rows.
+  // both are worked out against the same material and batch rows.
   const [insight, priceMoves] = await Promise.all([
     loadInsight(materials, production_runs, productionRunMaterials),
     loadPriceMoves(),
   ]);
 
   // Grouped once here rather than looked up per card: the produce dialog
-  // needs a production_run's own lines to check them against the shelf.
+  // needs a batch's own lines to check them against the shelf.
   const recipeByBatch = new Map<string, typeof productionRunMaterials>();
   for (const bi of productionRunMaterials) {
     const list = recipeByBatch.get(bi.production_run_id) ?? [];

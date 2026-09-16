@@ -130,6 +130,98 @@ export type BrandConfig = {
   /** Rendered in this order, so put the one the shop actually uses first. */
   socials: { name: string; href: string; handle: string }[];
 
+  /**
+   * The shop's own words.
+   *
+   * A template can share every screen and still not share a sentence. These
+   * are the ones that were found hardcoded in the system this grew from —
+   * a marquee of five claims, a line under the loading mark, a pill on the
+   * share card, the word a shop uses for its own catalogue. None of them is
+   * a design decision; each is a fact about one business, and each was
+   * invisible until the second shop rendered the first shop's copy.
+   */
+  copy: {
+    /** What this shop calls its catalogue. A kitchen has a Menu; a maker has a Shop. */
+    catalogue: string;
+    /** The line under the mark while the first page paints. */
+    loading: string;
+    /** One short claim, set in a pill on the link-preview card. */
+    badge: string;
+    /**
+     * Short lines for the scrolling strip, used when no promo is live.
+     *
+     * An empty strip reads as a page that failed to load, which is worse
+     * than a shop with nothing on offer — so this is what it falls back to.
+     */
+    strip: string[];
+    /**
+     * What the catalogue holds, as one phrase, for a search snippet.
+     *
+     * Nobody searches for "menu" or "shop". They search for the thing, and
+     * often in their own language — so this is where a shop names its
+     * products the way a customer would type them.
+     */
+    catalogueBlurb: string;
+    /**
+     * What this business is, in a sentence about itself — "a food stall",
+     * "a ribbon maker". Read straight into the terms page.
+     */
+    businessNoun: string;
+    /**
+     * The one clause this trade needs and no other does, or `null`.
+     *
+     * A kitchen owes its customers an allergen warning. A maker owes them a
+     * note on colour and handmade variation. Neither is boilerplate and
+     * neither belongs in the other's terms — but every trade has exactly one
+     * of these, so it gets a slot rather than a fork of the page.
+     */
+    termsClause: { title: string; body: string } | null;
+    /**
+     * Terms for the directory and aggregator sites that still scrape the
+     * keywords tag. Search engines dropped it over a decade ago; these are
+     * the searches a person would actually make, local and specific. One
+     * broad word wins nothing, so a shop lists none.
+     */
+    keywords: string[];
+  };
+
+  /**
+   * How a search engine should classify this business.
+   *
+   * Getting this wrong is not cosmetic. A ribbon maker published as a
+   * `Restaurant` that `servesCuisine: ["Taiwanese"]` does not rank badly for
+   * ribbon searches — it competes in the wrong category entirely, and the
+   * local results it does appear in are ones nobody wanted it in.
+   */
+  schema: {
+    /** The schema.org type: "Restaurant", "Store", "HomeGoodsStore", … */
+    type: string;
+    /**
+     * What this type calls its list of things for sale.
+     *
+     * Only a food business takes a `Menu` of `MenuItem`s. Everything else
+     * takes an `OfferCatalog` of `Product`s, and a block using the wrong one
+     * is discarded whole rather than read loosely.
+     */
+    catalogue: "Menu" | "OfferCatalog";
+    /**
+     * Properties that belong to that type and to no other — `servesCuisine`
+     * for a restaurant, `brand` for a store. Merged in as written, because
+     * schema.org has hundreds of types and a template cannot list them.
+     */
+    extras: Record<string, unknown>;
+  };
+
+  /**
+   * The shop's wordmark, or `null` while it has none.
+   *
+   * A wordmark is artwork a business owns, and a new shop rarely has one on
+   * the first day. `null` is not a missing file: it is the supported state
+   * where the name is set in the display face instead. A broken image icon
+   * is what happens when a template assumes otherwise.
+   */
+  wordmark: { src: string; width: number; height: number } | null;
+
   palette: Palette;
   roles: Roles;
   fonts: {
@@ -192,6 +284,31 @@ export function validateBrand(b: BrandConfig): BrandConfig {
   if (!/^[A-Z]{2}$/.test(c.country)) fail("contact.country must be a 2-letter ISO code");
   if (!Number.isFinite(c.lat) || Math.abs(c.lat) > 90) fail("contact.lat must be a latitude");
   if (!Number.isFinite(c.lng) || Math.abs(c.lng) > 180) fail("contact.lng must be a longitude");
+
+  for (const k of ["catalogue", "loading", "badge", "catalogueBlurb", "businessNoun"] as const)
+    if (!b.copy?.[k]?.trim()) fail(`copy.${k} is required`);
+  if (!Array.isArray(b.copy.strip) || b.copy.strip.length === 0)
+    fail("copy.strip needs at least one line — an empty strip reads as a broken page");
+  for (const line of b.copy.strip)
+    if (!line?.trim()) fail("every copy.strip line must say something");
+  if (!Array.isArray(b.copy.keywords)) fail("copy.keywords must be an array (empty is fine)");
+  if (b.copy.termsClause !== null &&
+      (!b.copy.termsClause?.title?.trim() || !b.copy.termsClause?.body?.trim()))
+    fail("copy.termsClause needs both a title and a body (or set it to null)");
+
+  if (!b.schema?.type?.trim()) fail("schema.type is required — the schema.org type this business is");
+  if (b.schema.catalogue !== "Menu" && b.schema.catalogue !== "OfferCatalog")
+    fail("schema.catalogue must be 'Menu' (food) or 'OfferCatalog' (everything else)");
+  if (b.schema.extras === null || typeof b.schema.extras !== "object" || Array.isArray(b.schema.extras))
+    fail("schema.extras must be an object (empty is fine)");
+
+  // `null` is a supported state; an object that is half-filled is not, and it
+  // is the shape that renders a broken image rather than failing here.
+  if (b.wordmark !== null) {
+    if (!b.wordmark?.src?.trim()) fail("wordmark.src is required (or set wordmark to null)");
+    if (!(b.wordmark.width > 0) || !(b.wordmark.height > 0))
+      fail("wordmark needs the artwork's real width and height, to reserve its space before it loads");
+  }
 
   if (!Array.isArray(b.socials)) fail("socials must be an array (empty is fine)");
   for (const s of b.socials) {

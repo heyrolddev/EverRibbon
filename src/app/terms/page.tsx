@@ -2,6 +2,7 @@ import { brand } from "../../../config/index.ts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { Children, cloneElement, isValidElement } from "react";
 import { SHOP } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -21,8 +22,8 @@ export const metadata: Metadata = {
  * describe a different shop than the one the code runs are worse than no
  * terms: they're a promise nobody can keep.
  *
- * Deliberately not written as legalese. The people reading this are buying
- * noodles.
+ * Deliberately not written as legalese. The people reading it are buying
+ * something, not litigating.
  */
 
 function Section({
@@ -30,7 +31,8 @@ function Section({
   title,
   children,
 }: {
-  n: number;
+  /** Injected by `Numbered`; never written by hand. */
+  n?: number;
   title: string;
   children: React.ReactNode;
 }) {
@@ -42,6 +44,27 @@ function Section({
       </h2>
       <div className="mt-3 flex flex-col gap-3 text-ink-900/80">{children}</div>
     </section>
+  );
+}
+
+/**
+ * Numbers the sections that are actually rendered.
+ *
+ * One clause here is per-trade and one shop in two has it. Hand-numbered, a
+ * shop without it published a contract that runs 8, 10, 11 — which reads like
+ * a clause was removed, on the one page where a customer is looking for
+ * exactly that.
+ */
+function Numbered({ children }: { children: React.ReactNode }) {
+  let n = 0;
+  return (
+    <div className="mt-10 flex flex-col gap-8">
+      {Children.map(children, (child) =>
+        isValidElement<{ n?: number }>(child)
+          ? cloneElement(child, { n: ++n })
+          : child,
+      )}
+    </div>
   );
 }
 
@@ -57,7 +80,8 @@ export default function TermsPage() {
 
       <section className="mx-auto max-w-3xl px-6 pb-20 pt-8">
         <p className="rounded-2xl bg-paper-100 p-5 text-sm text-ink-900/70 ring-1 ring-ink-950/10">
-          {SHOP.name} is a food stall in {SHOP.locality}, {SHOP.region}. This
+          {SHOP.name} is {SHOP.copy.businessNoun} in {SHOP.locality},{" "}
+          {SHOP.region}. This
           page describes how we handle orders placed through this website. By
           placing an order you&apos;re agreeing to it. If anything here
           doesn&apos;t match what happened with your order, ring us on{" "}
@@ -70,11 +94,11 @@ export default function TermsPage() {
           — a phone call sorts most things faster than a policy does.
         </p>
 
-        <div className="mt-10 flex flex-col gap-8">
-          <Section n={1} title="Your account">
+        <Numbered>
+          <Section title="Your account">
             <p>
               You need an account to order, so we can show you your orders and
-              tell you when your food is ready. Keep your password to yourself —
+              tell you when your order is ready. Keep your password to yourself —
               anything ordered from your account is treated as ordered by you.
             </p>
             <p>
@@ -89,20 +113,20 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section n={2} title="Prices and the menu">
+          <Section title={`Prices and the ${SHOP.copy.catalogue.toLowerCase()}`}>
             <p>
               Prices are in Philippine pesos and include what&apos;s shown on
               the item. What you pay is the price at the moment you place the
               order, even if the menu changes afterwards.
             </p>
             <p>
-              We cook fresh and in small production_runs, so an item can run out during
+              We cook fresh and in small batches, so an item can run out during
               the day. If something you ordered is gone, we&apos;ll ring you
               before cooking the rest.
             </p>
           </Section>
 
-          <Section n={3} title="Paying">
+          <Section title="Paying">
             <p>
               <strong className="text-ink-950">Cash</strong> is paid when you
               collect, or to the rider on delivery.
@@ -122,7 +146,7 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section n={4} title="Ordering ahead">
+          <Section title="Ordering ahead">
             <p>
               Booking a time has to be paid for up front — in full, or with a
               down payment. That&apos;s what holds the slot: we buy for it and
@@ -135,7 +159,7 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section n={5} title="How long it takes">
+          <Section title="How long it takes">
             <p>
               The countdown on your order is our{" "}
               <strong className="text-ink-950">best estimate</strong>, typed in
@@ -143,14 +167,14 @@ export default function TermsPage() {
               of stock, or one big order ahead of yours will move it.
             </p>
             <p>
-              We&apos;ll tell you when your food is actually ready — that
+              We&apos;ll tell you when your order is actually ready — that
               message is the real one, not the timer.
             </p>
           </Section>
 
-          <Section n={6} title="Pickup and delivery">
+          <Section title="Pickup and delivery">
             <p>
-              Pickup is at the stall: {SHOP.street}, {SHOP.locality}.
+              Pickup is at {SHOP.street}, {SHOP.locality}.
             </p>
             <p>
               For delivery, drop the pin on the map at checkout as exactly as
@@ -162,20 +186,20 @@ export default function TermsPage() {
             <p>
               Riders will call or text when they&apos;re close, so keep your
               phone nearby. If nobody answers and nobody comes down, the rider
-              can&apos;t wait indefinitely — the food comes back to the stall
-              and the order is still payable.
+              can&apos;t wait indefinitely — the order comes back to us and is
+              still payable.
             </p>
           </Section>
 
-          <Section n={7} title="Changes and cancellations">
+          <Section title="Changes and cancellations">
             <p>
               There&apos;s no cancel button on this site, and that&apos;s
-              deliberate: once an order reaches the kitchen it&apos;s food, not
-              a line in a database.{" "}
+              deliberate: once an order is in production it is a real thing
+              being made, not a line in a database.{" "}
               <strong className="text-ink-950">
                 Ring us on {SHOP.phone}
               </strong>{" "}
-              and we&apos;ll sort it — if we haven&apos;t started cooking, we
+              and we&apos;ll sort it — if we haven&apos;t started making it, we
               can usually cancel or change it.
             </p>
             <p>
@@ -185,25 +209,20 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section n={8} title="If something's wrong with your food">
+          <Section title="If something's wrong with your order">
             <p>
-              Tell us the same day, ideally before you finish it, and bring or
-              send a photo. We&apos;ll replace it or refund it. We&apos;d much
-              rather hear it from you than read it in a review.
+              Tell us the same day and send a photo. We&apos;ll replace it or
+              refund it. We&apos;d much rather hear it from you than read it in
+              a review.
             </p>
           </Section>
 
-          <Section n={9} title="Allergies">
-            <p>
-              We cook everything in one small kitchen. Peanuts, soy, wheat,
-              eggs, shellfish and sesame are all in regular use, and we
-              can&apos;t promise any product is free of traces of them. If you have
-              a serious allergy, please ring us before ordering rather than
-              relying on the notes box.
-            </p>
-          </Section>
-
-          <Section n={10} title="Reviews">
+          {SHOP.copy.termsClause && (
+            <Section title={SHOP.copy.termsClause.title}>
+              <p>{SHOP.copy.termsClause.body}</p>
+            </Section>
+          )}
+          <Section title="Reviews">
             <p>
               You can review products you&apos;ve actually ordered. Say what you
               like — we may reply publicly, and we&apos;ll hide anything abusive
@@ -211,7 +230,7 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section n={11} title="Notifications">
+          <Section title="Notifications">
             <p>
               If you turn on notifications, we use them only for your own
               orders. It&apos;s per device, and you can turn it off in{" "}
@@ -222,7 +241,7 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section n={12} title="Your details">
+          <Section title="Your details">
             <p>
               We keep your name, mobile number, email, delivery address and pin,
               and your order history — because we need them to cook, deliver and
@@ -237,13 +256,13 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section n={13} title="Changes to these terms">
+          <Section title="Changes to these terms">
             <p>
               We&apos;ll update this page as the shop changes. The version here
               when you place an order is the one that applies to it.
             </p>
           </Section>
-        </div>
+        </Numbered>
 
         <p className="mt-12 rounded-2xl bg-accent-200/15 p-5 text-sm text-ink-900/70 ring-1 ring-accent-200/40">
           <strong className="text-ink-950">Questions?</strong> Ring{" "}

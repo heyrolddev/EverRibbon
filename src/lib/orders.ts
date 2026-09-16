@@ -9,6 +9,8 @@
  * with a second array naming which of them were "active" and a third mapping
  * each to its colours. Adding a step meant editing three places and hoping.
  */
+
+import { brand } from "../../config/index.ts";
 /**
  * How the order reaches the customer, in the shop's words.
  *
@@ -81,7 +83,7 @@ export function quantityProblem(
     return "Please choose at least one of each item.";
   }
   if (qty > MAX_LINE_QTY) {
-    return `That's more than ${MAX_LINE_QTY} of one product — please ring us on +63 947 353 3060 so we can prepare for a large order.`;
+    return `That's more than ${MAX_LINE_QTY} of one product — please ring us on ${brand.contact.phone} so we can prepare for a large order.`;
   }
   return null;
 }

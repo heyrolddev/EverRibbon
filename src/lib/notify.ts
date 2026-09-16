@@ -69,13 +69,13 @@ function bodyFor(
     case "confirmed":
       return "Salamat! We've got your order and the kitchen has it. We'll let you know the moment it's ready.";
     case "preparing":
-      return "Your food is on the wok now. We'll message you again the moment it's ready.";
+      return "We're making your order now. We'll message you again the moment it's ready.";
     case "ready":
       return fulfillment === "delivery"
-        ? "Your food is ready and waiting for a rider. They'll call or text you when they're close, so keep your phone nearby."
-        : "Your food is ready for pickup — we're in front of Palengkeni, beside Osave.";
+        ? "Your order is ready and waiting for a rider. They'll call or text you when they're close, so keep your phone nearby."
+        : `Your order is ready for pickup — we're at ${brand.contact.street}, ${brand.contact.locality}.`;
     case "out_for_delivery":
-      return "Your rider has left the stall. Keep your phone nearby. 🛵";
+      return "Your rider is on the way. Keep your phone nearby. 🛵";
     case "cancelled":
       return reason?.trim()
         ? `Sorry — we had to cancel this one. ${reason.trim()}`
@@ -96,11 +96,11 @@ function pushBodyFor(status: OrderStatus, fulfillment: string): string {
     case "confirmed":
       return "The kitchen has it. We'll tell you when it's ready.";
     case "preparing":
-      return "On the wok now. Not long. 🔥";
+      return "Being made now. Not long. ✨";
     case "ready":
       return fulfillment === "delivery"
         ? "Waiting for a rider — they'll ring you. Keep your phone nearby. 📱"
-        : "Ready for pickup — in front of Palengkeni, beside Osave.";
+        : `Ready for pickup — ${brand.contact.street}, ${brand.contact.locality}.`;
     case "out_for_delivery":
       return "On its way to you. Keep your phone nearby. 🛵";
     case "cancelled":
@@ -154,7 +154,7 @@ async function sendEmail(
         `Order ${ref}`,
         "",
         `${brand.name} — ${brand.contact.street}, ${brand.contact.locality}`,
-        "+63 947 353 3060",
+        brand.contact.phone,
       ].join("\n"),
     }),
     signal: AbortSignal.timeout(8000),

@@ -7,6 +7,8 @@
  * "finished", "off" — rather than just silently not rendering something.
  */
 
+import { brand } from "../../config/index.ts";
+
 export type AnnouncementKind = "promo" | "news" | "dine_in" | "coming_soon";
 
 /**
@@ -83,12 +85,11 @@ export const hasMedia = (row: Announcement) => Boolean(row.image_url || row.vide
 /**
  * Is there more to this than its title?
  *
- * The strip lines seeded with this table — "Black Pepper Noodles", "Giant Ji
- * Pai" — are promo rows because the scrolling strip is what they are for.
- * They are not offers, and shown as cards they became four yellow boxes
- * containing a heading and the words "read more", which led to a page
- * repeating the heading. A card has to earn its place with a description or
- * a picture.
+ * A shop's standing strip lines get seeded into this table as promo rows,
+ * because the scrolling strip is what they are for. They are not offers, and
+ * shown as cards they became boxes containing a heading and the words "read
+ * more", leading to a page that repeated the heading. A card has to earn its
+ * place with a description or a picture.
  */
 export const hasDetail = (row: Announcement) => Boolean(row.body || hasMedia(row));
 
@@ -209,20 +210,13 @@ export const STATE_TONE: Record<HomeState, { label: string; chip: string }> = {
 /**
  * The strip that scrolls across the homepage.
  *
- * Falls back to the shop's original five lines when nothing is live. A stall
+ * Falls back to the shop's own standing lines when nothing is live. A shop
  * with no promo running still wants the strip saying what it sells — an empty
- * band of red across the homepage looks like the page failed to load, which
- * is a worse outcome than a promo nobody is running.
+ * band across the homepage looks like the page failed to load, which is a
+ * worse outcome than a promo nobody is running.
  */
-const DEFAULT_STRIP = [
-  "Black Pepper Noodles",
-  "Made Fresh Daily",
-  "Free Coffee Dine-In",
-  "Giant Ji Pai",
-  "Taiwan Milktea",
-];
 
 export function stripItems(promos: Announcement[]): string[] {
   const live = promos.map((p) => p.title.trim()).filter(Boolean);
-  return live.length > 0 ? live : DEFAULT_STRIP;
+  return live.length > 0 ? live : brand.copy.strip;
 }

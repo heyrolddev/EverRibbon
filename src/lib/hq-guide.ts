@@ -329,13 +329,13 @@ export const TOPICS: GuideTopic[] = [
   {
     id: "production_run",
     group: "The kitchen",
-    question: "How do I cook a production_run (sauce, marinade)?",
+    question: "How do I cook a batch (sauce, marinade)?",
     triggers: ["production_run", "sauce", "marinade", "niluto", "prep", "cook ahead", "produce", "sabaw"],
     where: { href: "/admin/inventory", label: "Inventory" },
     answer:
-      "A production_run is something you make once and use across many products — the black pepper sauce, a marinade.\n\n" +
-      "Give it a recipe once. Then 'Produce a production_run' deducts all its materials in one go and adds the finished production_run to stock, priced at what those materials actually cost.\n\n" +
-      "Products that use it then draw from the production_run rather than from raw materials, so the cost of a plate includes its share of the sauce without you working it out each time.",
+      "A batch is something you make once and use across many products — the black pepper sauce, a marinade.\n\n" +
+      "Give it a recipe once. Then 'Produce a batch' deducts all its materials in one go and adds the finished batch to stock, priced at what those materials actually cost.\n\n" +
+      "Products that use it then draw from the batch rather than from raw materials, so the cost of a plate includes its share of the sauce without you working it out each time.",
   },
   {
     id: "waste",
@@ -440,7 +440,7 @@ export const TOPICS: GuideTopic[] = [
     answer:
       "Three levels, and the difference is money.\n\n" +
       "• STAFF — the counter, the orders, the inbox. Sees what stock is left and can log waste. NO prices, NO costs, NO takings.\n" +
-      "• MANAGER — all of that, plus restocking, recipes, cooking production_runs, marking a product sold out, and posting promos and answers. Still cannot see what anything earns or change a price.\n" +
+      "• MANAGER — all of that, plus restocking, recipes, cooking batches, marking a product sold out, and posting promos and answers. Still cannot see what anything earns or change a price.\n" +
       "• OWNER — everything, including this assistant.\n\n" +
       "This is not just hidden buttons. The database itself refuses: even if someone got at the data directly, a staff account cannot read your costs.",
   },

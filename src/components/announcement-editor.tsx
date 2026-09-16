@@ -345,10 +345,10 @@ function Window({ row }: { row: Announcement }) {
 }
 
 const PLACEHOLDER_TITLE: Record<AnnouncementKind, string> = {
-  promo: "e.g. Free coffee when you dine in",
+  promo: "e.g. 10% off orders over 3 items",
   news: "e.g. Closed 5 Sept",
-  dine_in: "e.g. Free coffee when you dine in ☕",
-  coming_soon: "e.g. Chicken Wings & Chicken Pops 🔥",
+  dine_in: "e.g. Something for walk-in customers",
+  coming_soon: "e.g. A new line, landing next month",
 };
 
 const PLACEHOLDER_BODY: Record<AnnouncementKind, string> = {

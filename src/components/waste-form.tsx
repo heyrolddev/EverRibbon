@@ -27,7 +27,7 @@ export function WasteForm({
   preselect,
   onClose,
 }: {
-  /** Materials and production_runs, priced. */
+  /** Materials and batches, priced. */
   options: RecipeOption[];
   preselect?: { kind: "inv" | "production_run"; id: string };
   onClose: () => void;

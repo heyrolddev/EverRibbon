@@ -146,7 +146,7 @@ export async function buildSnapshot(): Promise<ShopSnapshot> {
       prior30: Math.round(sum(prior30) * 100) / 100,
       avgOrder:
         completed.length > 0 ? Math.round((sum(completed) / completed.length) * 100) / 100 : 0,
-      currency: "PHP",
+      currency: brand.currency.code,
     },
     orders: {
       last30: last30.length,

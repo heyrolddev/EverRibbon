@@ -76,16 +76,16 @@ async function getMenu(): Promise<{
  * for the menu looked identical to a result for the homepage.
  *
  * The description names the products and the town, because that is what the
- * search actually was. Nobody types "menu"; they type "black pepper noodles
- * apalit".
+ * search actually was. Nobody types the name of the page; they type the thing
+ * they want and where they are.
  */
 export const metadata: Metadata = {
-  title: "Menu",
-  description: `The full ${SHOP.name} menu — Taiwan-style black pepper noodles, Ji Pai chicken, rice products and milktea, made fresh daily in ${SHOP.locality}, ${SHOP.region}. Order ahead for pickup or delivery.`,
+  title: SHOP.copy.catalogue,
+  description: `The full ${SHOP.name} ${SHOP.copy.catalogue.toLowerCase()} — ${SHOP.copy.catalogueBlurb}, made in ${SHOP.locality}, ${SHOP.region}. Order ahead for pickup or delivery.`,
   alternates: { canonical: `${siteUrl()}/menu` },
   openGraph: {
-    title: `Menu · ${SHOP.name}`,
-    description: `Taiwan-style black pepper noodles, Ji Pai chicken, rice products and milktea in ${SHOP.locality}. Order ahead for pickup or delivery.`,
+    title: `${SHOP.copy.catalogue} · ${SHOP.name}`,
+    description: `${SHOP.copy.catalogueBlurb} in ${SHOP.locality}. Order ahead for pickup or delivery.`,
     url: `${siteUrl()}/menu`,
     type: "website",
   },
@@ -104,28 +104,35 @@ export default async function MenuPage() {
   return (
     <main className="flex-1">
       {/* Compact, and with no scrolling banner under it. Both were earning
-          their keep on the homepage, where the job is to make someone hungry.
-          Here the customer is already hungry — they opened the menu — and
-          every pixel above the first photo is a pixel of food they can't see
-          yet. */}
+          their keep on the homepage, where the job is to get someone
+          interested. Here they already are — they opened the catalogue — and
+          every pixel above the first photograph is a pixel of the thing they
+          came to look at. */}
       <PageHeader
         compact
-        eyebrow="Fresh daily"
-        title="The Menu"
-        subtitle="Order ahead for pickup or delivery — everything made in-house, same day."
+        eyebrow={SHOP.copy.badge}
+        title={SHOP.copy.catalogue}
+        // The shop's own words for what it sells, then how it sells it. The
+        // second half is the fulfillment mode and nothing else, so it does
+        // not need a sentence in the config to say it twice.
+        subtitle={`${SHOP.copy.catalogueBlurb.replace(/^./, (c) => c.toUpperCase())} — ${
+          SHOP.fulfillment === "made_to_order"
+            ? "ordered ahead, then built for you"
+            : "ordered ahead for pickup or delivery"
+        }.`}
       />
 
       <section className="mx-auto max-w-6xl px-6 pb-14 pt-6">
         {!configured && (
           <p className={emptyStateClass}>
-            Menu setup in progress — connect Supabase (see{" "}
+            {SHOP.copy.catalogue} setup in progress — connect Supabase (see{" "}
             <code>.env.example</code>) to show live items here.
           </p>
         )}
         {configured && (!menu || menu.length === 0) && (
           <p className={emptyStateClass}>
-            Nothing on the menu yet — add products in Supabase to have them show
-            up here.
+            Nothing here yet — add products in Supabase to have them show up
+            on this page.
           </p>
         )}
         {configured && menu && menu.length > 0 && (

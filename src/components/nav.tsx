@@ -20,7 +20,7 @@ import { roleLabel } from "@/lib/permissions";
  * out — and it pushed the full row past the width of a laptop.
  */
 const links = [
-  { href: "/menu", label: "Menu" },
+  { href: "/menu", label: brand.copy.catalogue },
   { href: "/reviews", label: "Reviews" },
 ];
 

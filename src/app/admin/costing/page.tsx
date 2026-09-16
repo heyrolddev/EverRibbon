@@ -57,7 +57,7 @@ export default async function AdminCostingPage() {
     .order("sort_order")
     .order("name");
 
-  // What a recipe line may point at: every material, and every production_run at its
+  // What a recipe line may point at: every material, and every batch at its
   // cost per unit of yield — the same number the costing engine multiplies by.
   const options: RecipeOption[] = [
     ...materials.map((i) => ({

@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps<"/news/[id]">) {
   if (!row) return { title: `Not found · ${brand.name}` };
   return {
     title: `${row.title} · ${brand.name}`,
-    description: row.body ?? `From the stall at ${brand.name}.`,
+    description: row.body ?? `From ${brand.name}.`,
     openGraph: {
       title: row.title,
       description: row.body ?? undefined,

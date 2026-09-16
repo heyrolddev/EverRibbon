@@ -27,7 +27,7 @@ export type Suggestion = {
   buy: number;
   cost: number;
   /**
-   * ProductionRuns already made from this material that are still in stock.
+   * Batches already made from this material that are still in stock.
    * "Low, but you've got 2,125g of Black Pepper Sauce made" stops a panic
    * buy for something already prepped — the single most useful line in the
    * old app.
@@ -291,7 +291,7 @@ export async function runHealthCheck(): Promise<HealthIssue[]> {
   for (const r of (batIng.data ?? []) as { production_run_id: string; material_id: string }[]) {
     if (!ingIds.has(r.material_id)) {
       issues.push({
-        kind: "ProductionRun recipe",
+        kind: "Batch recipe",
         detail: `"${batchName.get(r.production_run_id) ?? r.production_run_id}" uses a material that no longer exists.`,
       });
     }

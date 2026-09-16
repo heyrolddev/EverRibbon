@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { brand } from "../../config/index.ts";
 import { Logo } from "@/components/logo";
 import { BrandLoader } from "@/components/brand-loader";
 
@@ -63,15 +64,13 @@ export function Preloader() {
             <Logo width={320} priority className="h-auto w-[220px] sm:w-[300px]" />
           </div>
 
-          {/* The shop's one job, drawn: fire leaping out of the pan with the
-              peppercorns tossing in it. The five hopping dots it replaced were
-              a loading spinner in the shop's colours. This one is the
-              same shape for every shop, and a shop that wants its own
-              replaces one component. */}
+          {/* One shape for every shop, drawn in the shop's own colours. A
+              shop that wants its own mark in motion replaces this component;
+              nothing else knows what is in it. */}
           <BrandLoader className="mt-6 h-auto w-[120px] sm:w-[140px]" />
 
           <p className="mt-6 text-xs font-bold uppercase tracking-[0.3em] text-paper-100/50">
-            Firing up the pan…
+            {brand.copy.loading}
           </p>
 
           <div className="mt-8 h-0.5 w-40 overflow-hidden rounded-full bg-paper-100/15">

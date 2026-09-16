@@ -6,12 +6,11 @@ import type { Product } from "@/components/menu-list";
 /**
  * The menu, in the form a search engine can actually read.
  *
- * `ShopSchema` already tells Google there is a restaurant here and links to
- * `/menu` — but a link is all it is. Google knows a menu exists; it does not
- * know that one of the products is Black Pepper Noodles at ₱149. That is the
- * difference between ranking for "taiwanese food apalit" and ranking for
- * "black pepper noodles", which is the search with the customer already
- * decided on it.
+ * `ShopSchema` already tells Google there is a business here and links to
+ * the catalogue — but a link is all it is. Google knows a catalogue exists;
+ * it does not know what is in it or what any of it costs. That is the
+ * difference between ranking for the shop's trade and ranking for the exact
+ * product, which is the search with the customer already decided.
  *
  * Every value comes from the same rows the page renders. There is no second
  * list to keep in step: if a product is renamed or repriced in HQ, this changes
@@ -45,46 +44,73 @@ export function MenuSchema({
   const rest = products.filter((m) => !placed.has(m.id));
   const sections = rest.length ? [...named, { name: "More", items: rest }] : named;
 
+  // One item, described once, in whichever vocabulary this shop's type takes.
+  const item = (product: (typeof products)[number]) => ({
+    name: product.name,
+    ...(product.description ? { description: product.description } : {}),
+    ...(product.image_url ? { image: product.image_url } : {}),
+    offers: {
+      "@type": "Offer",
+      price: product.price.toFixed(2),
+      priceCurrency: brand.currency.code,
+      availability: "https://schema.org/InStock",
+    },
+    // Only claimed where real ratings exist. An invented rating is the fastest
+    // way to have every rich result for this site suppressed, and the
+    // suppression is site-wide, not just for the product that lied.
+    ...(product.review_count && product.avg_rating
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: product.avg_rating.toFixed(1),
+            reviewCount: product.review_count,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
+  });
+
+  const food = brand.schema.catalogue === "Menu";
+
   const schema = {
     "@context": "https://schema.org",
-    "@type": "Menu",
-    "@id": `${url}/menu#menu`,
-    name: `${SHOP.name} menu`,
+    "@type": brand.schema.catalogue,
+    "@id": `${url}/menu#catalogue`,
+    name: `${SHOP.name} ${SHOP.copy.catalogue.toLowerCase()}`,
     url: `${url}/menu`,
     inLanguage: brand.locale,
-    // Ties the menu back to the Restaurant block on the homepage, so the two
-    // are read as one business rather than two unrelated things.
-    isPartOf: { "@id": `${url}/#restaurant` },
-    hasMenuSection: sections.map((section) => ({
-      "@type": "MenuSection",
-      name: section.name,
-      hasMenuItem: section.items.map((product) => ({
-        "@type": "MenuItem",
-        name: product.name,
-        ...(product.description ? { description: product.description } : {}),
-        ...(product.image_url ? { image: product.image_url } : {}),
-        offers: {
-          "@type": "Offer",
-          price: product.price.toFixed(2),
-          priceCurrency: "PHP",
-          availability: "https://schema.org/InStock",
-        },
-        // Only claimed where real ratings exist. An invented rating is the
-        // fastest way to have every rich result for this site suppressed,
-        // and the suppression is site-wide, not just for the product that lied.
-        ...(product.review_count && product.avg_rating
-          ? {
-              aggregateRating: {
-                "@type": "AggregateRating",
-                ratingValue: product.avg_rating.toFixed(1),
-                reviewCount: product.review_count,
-                bestRating: 5,
-                worstRating: 1,
-              },
-            }
-          : {}),
-      })),
-    })),
+    // Ties the catalogue back to the business block on the homepage, so the
+    // two are read as one business rather than two unrelated things.
+    isPartOf: { "@id": `${url}/#business` },
+
+    // Same data, two vocabularies. A Menu holds MenuSections of MenuItems; an
+    // OfferCatalog holds ItemLists of Products. Google reads one or the other
+    // depending on what the business is, and a Menu published by anything that
+    // is not a food business is not read loosely — it is dropped.
+    ...(food
+      ? {
+          hasMenuSection: sections.map((section) => ({
+            "@type": "MenuSection",
+            name: section.name,
+            hasMenuItem: section.items.map((product) => ({
+              "@type": "MenuItem",
+              ...item(product),
+            })),
+          })),
+        }
+      : {
+          itemListElement: sections.map((section, i) => ({
+            "@type": "ItemList",
+            name: section.name,
+            position: i + 1,
+            itemListElement: section.items.map((product, j) => ({
+              "@type": "ListItem",
+              position: j + 1,
+              item: { "@type": "Product", ...item(product) },
+            })),
+          })),
+        }),
   };
 
   return (

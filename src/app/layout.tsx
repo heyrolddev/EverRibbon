@@ -57,31 +57,21 @@ export const metadata: Metadata = {
   // kept because some Philippine directory and aggregator sites still read it
   // when they scrape a listing — that is its whole remaining job, so the
   // terms here are the ones a person would actually type, local and specific.
-  // "pepper" and "food" alone are not searches anyone makes with the intent
-  // to eat at a stall in Apalit; they are words that appear in a hundred
-  // million pages, and listing them wins nothing.
+  // A single broad word is not a search anyone makes with the intent to buy
+  // from one shop in one town; it appears in a hundred million pages, and
+  // listing it wins nothing. The shop's own terms live in its config.
   keywords: [
     brand.name,
     `${brand.name} ${brand.contact.locality}`,
-    "Taiwanese food Apalit",
-    "Taiwan street food Pampanga",
-    "black pepper noodles",
-    "black pepper noodles Apalit",
-    "peppery noodles Pampanga",
-    "Ji Pai",
-    "Ji Pai chicken Apalit",
-    "milktea Apalit",
-    "food delivery Apalit Pampanga",
-    "pagkain sa Apalit",
-    "masarap na pagkain Apalit",
-    "New Apalit Public Market food",
+    ...brand.copy.keywords,
   ],
   openGraph: {
     type: "website",
     siteName: SHOP.name,
     title: `${SHOP.name} — ${SHOP.tagline}`,
     description: SHOP.description,
-    locale: "en_PH",
+    // The BCP-47 tag as Open Graph spells it: underscore, not hyphen.
+    locale: SHOP.locale.replace("-", "_"),
   },
   twitter: {
     card: "summary_large_image",

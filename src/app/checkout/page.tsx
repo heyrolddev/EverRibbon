@@ -1,3 +1,4 @@
+import { brand } from "../../../config/index.ts";
 import Link from "next/link";
 import { getViewer, isConfigured } from "@/lib/auth";
 import { CheckoutForm } from "@/components/checkout-form";
@@ -58,8 +59,8 @@ export default async function CheckoutPage() {
         <PageHeader eyebrow="Account on hold" title="Ordering paused" />
         <section className="mx-auto max-w-md px-6 py-14">
           <p className="rounded-3xl bg-brand-700 p-8 text-center font-semibold text-paper-50">
-            Ordering is paused on this account. Please contact us at
-            +63 947 353 3060 if you think this is a mistake.
+            Ordering is paused on this account. Please contact us at{" "}
+            {brand.contact.phone} if you think this is a mistake.
           </p>
         </section>
       </main>

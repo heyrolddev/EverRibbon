@@ -60,8 +60,8 @@ type Facts = {
   } | null;
 };
 
-const PHONE = "+63 947 353 3060";
-const WHERE = "in front of Palengkeni, beside Osave, Apalit";
+const PHONE = brand.contact.phone;
+const WHERE = `${brand.contact.street}, ${brand.contact.locality}`;
 
 
 // ---------------------------------------------------------------------------
@@ -423,10 +423,11 @@ function bestSellerAnswer(f: Facts, tl: boolean): string {
   const product = name ? f.products.find((m) => m.name === name) : null;
 
   if (!product) {
-    // No sales history yet — don't invent a favourite, point at the menu.
+    // No sales history yet — don't invent a favourite, point at the catalogue.
+    const cat = brand.copy.catalogue;
     return tl
-      ? "Lahat po masarap, pero ang black pepper noodles po talaga ang hinahanap ng mga suki. Tingnan niyo po ang Menu page para sa buong lista!"
-      : "Our black pepper noodles are what people come back for. Have a look at the Menu page for the full list!";
+      ? `Wala pa po kaming masasabing best seller — bago pa lang po kami. Tingnan niyo po ang ${cat} page para sa buong lista!`
+      : `We don't have a best seller to point to yet. Have a look at the ${cat} page for the full list.`;
   }
 
   return tl

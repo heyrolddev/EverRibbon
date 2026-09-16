@@ -13,6 +13,9 @@ export const SHOP = {
   name: brand.name,
   tagline: brand.tagline,
   description: brand.description,
+  locale: brand.locale,
+  fulfillment: brand.fulfillment,
+  copy: brand.copy,
   ...brand.contact,
 } as const;
 

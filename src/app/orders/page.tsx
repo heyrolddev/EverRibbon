@@ -106,7 +106,7 @@ export default async function OrdersPage() {
           </h1>
           <p className="mt-2 text-sm text-ink-900/70">
             Your orders are safe — this is our problem, not yours. Please try
-            again in a moment, or call us on +63 947 353 3060.
+            again in a moment, or call us on {brand.contact.phone}.
           </p>
         </div>
       </main>

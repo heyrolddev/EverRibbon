@@ -346,7 +346,7 @@ export async function GET(request: NextRequest) {
       t.materials,
       batchCosts
     );
-    // One row per line, both for production_runs and products — the flat shape a
+    // One row per line, both for batches and products — the flat shape a
     // spreadsheet can pivot, and the only file here that carries the actual
     // recipes rather than a summary of them.
     const rows: unknown[][] = [];

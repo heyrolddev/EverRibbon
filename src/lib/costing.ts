@@ -3,7 +3,7 @@ import { money } from "./format.ts";
  * What a product actually costs to make.
  *
  * Fourteen tables have been sitting in this database since the first
- * migration — materials, production_runs, recipes, waste — and until now not one
+ * migration — materials, batches, recipes, waste — and until now not one
  * line of the app read them. So the shop knew exactly what came in and nothing
  * at all about what went out, which means the number everyone actually cares
  * about, "did I make money on that", has never once been on screen.
@@ -89,12 +89,12 @@ export type CostLine = {
 
 export type BatchCost = {
   production_run: ProductionRun;
-  /** ₱ to make one full production_run. */
+  /** ₱ to make one full batch. */
   total: number;
   /** ₱ per unit of yield — this is what a recipe multiplies by. */
   perUnit: number;
   lines: CostLine[];
-  /** True when nothing reliable can be said about this production_run's cost. */
+  /** True when nothing reliable can be said about this batch's cost. */
   unknown: boolean;
   problems: string[];
 };
@@ -120,9 +120,9 @@ function safeDiv(total: number, by: number): number | null {
 }
 
 /**
- * Price every production_run.
+ * Price every batch.
  *
- * ProductionRuns only ever contain materials, never other production_runs, so there's no
+ * Batches only ever contain materials, never other batches, so there's no
  * recursion to worry about here — a single pass is enough.
  */
 export function costBatches(
@@ -146,7 +146,7 @@ export function costBatches(
       const ing = byId.get(bi.material_id);
       if (!ing) {
         const problem = "Material no longer exists";
-        problems.push(`A line in this production_run points at a deleted material.`);
+        problems.push(`A line in this batch points at a deleted material.`);
         return {
           label: "Deleted material",
           kind: "material" as const,
@@ -175,7 +175,7 @@ export function costBatches(
 
     // A repack — bought ready-made and split into portions — has no recipe by
     // design, and its cost is typed in directly. Checked first, or a repack
-    // would be reported as an empty production_run.
+    // would be reported as an empty batch.
     const manual = production_run.manual_cost_per_unit;
     if (manual !== null && manual !== undefined && Number(manual) > 0) {
       out.set(production_run.id, {
@@ -193,7 +193,7 @@ export function costBatches(
     if (perUnit === null) {
       problems.push(
         raw.length === 0
-          ? "No recipe entered for this production_run."
+          ? "No recipe entered for this batch."
           : "Yield is zero, so a per-gram cost can't be worked out."
       );
     }
@@ -253,15 +253,15 @@ export function costMeals(
       if (mi.ref_type === "production_run") {
         const bc = batchCosts.get(mi.ref_id);
         if (!bc) {
-          problems.push("A line points at a production_run that no longer exists.");
+          problems.push("A line points at a batch that no longer exists.");
           lines.push({
-            label: "Deleted production_run",
+            label: "Deleted batch",
             kind: "production_run",
             qty,
             unit: "",
             unitCost: 0,
             cost: 0,
-            problem: "ProductionRun no longer exists",
+            problem: "Batch no longer exists",
           });
           continue;
         }
@@ -275,7 +275,7 @@ export function costMeals(
           unit: bc.production_run.yield_unit,
           unitCost: bc.perUnit,
           cost: qty * bc.perUnit,
-          problem: bc.unknown ? "ProductionRun not costed" : null,
+          problem: bc.unknown ? "Batch not costed" : null,
         });
         continue;
       }

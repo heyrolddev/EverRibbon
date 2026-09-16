@@ -133,15 +133,18 @@ export function renderReceipt(r: Receipt, width: RollWidth = "narrow"): ReceiptR
   const cols = COLUMNS[width];
   const out: ReceiptRow[] = [];
 
+  const { street, locality, region, phone } = brand.contact;
+
   out.push({ text: brand.name.toUpperCase(), align: "centre", big: true });
-  out.push(mid("Taiwan-Style Food"));
+  for (const line of wrap(brand.tagline, cols)) out.push(mid(line));
   // The town first, the landmark after — a receipt gets read away from the
-  // stall as often as at it, and "in front of Palengkeni" only helps someone
-  // who already knows which town Palengkeni is in.
-  out.push(mid("Apalit, Pampanga."));
-  out.push(mid("(In front of Palengkeni,"));
-  out.push(mid("beside Osave! - Apalit)"));
-  out.push(mid("+63 947 353 3060"));
+  // shop as often as at it, and a street line naming a neighbour only helps
+  // someone who already knows which town that neighbour is in. Wrapped rather
+  // than hand-split: the next shop's address is a different length.
+  out.push(mid(`${locality}, ${region}.`));
+  if (street && street !== locality)
+    for (const line of wrap(`(${street})`, cols)) out.push(mid(line));
+  out.push(mid(phone));
   out.push(left(""));
 
   const when = new Intl.DateTimeFormat(brand.locale, {

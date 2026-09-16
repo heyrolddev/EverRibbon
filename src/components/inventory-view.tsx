@@ -81,7 +81,7 @@ type Editing =
 export type BatchRow = {
   id: string;
   name: string;
-  /** What goes into one production_run, so the produce dialog can check the shelf. */
+  /** What goes into one batch, so the produce dialog can check the shelf. */
   recipe: { materialId: string; qty: number }[];
   yieldQty: number;
   yieldUnit: string;
@@ -218,8 +218,8 @@ export function InventoryView({
   // out. Five is what fits on a phone at 5am without scrolling.
   const [showAllBuy, setShowAllBuy] = useState(false);
 
-  // Everything a recipe line can point at, priced. Materials only — a production_run
-  // made of production_runs is a recursion nobody at the stall asked for.
+  // Everything a recipe line can point at, priced. Materials only — a batch
+  // made of batches is a recursion nobody at the stall asked for.
   const ingredientOptions: RecipeOption[] = useMemo(
     () =>
       stock.map((s) => ({
@@ -288,7 +288,7 @@ export function InventoryView({
           >
             Log waste
           </button>
-          {/* Logging waste stays with everyone. Throwing away a burnt production_run
+          {/* Logging waste stays with everyone. Throwing away a burnt batch
               happens at the moment it burns, by whoever burnt it — a system
               that makes that need a manager is a system where waste quietly
               stops being logged and the shelf drifts from the count. */}
@@ -522,7 +522,7 @@ export function InventoryView({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={tab === "stock" ? "Search a material…" : "Search a production_run…"}
+            placeholder={tab === "stock" ? "Search a material…" : "Search a batch…"}
             className="min-w-0 flex-1 rounded-xl bg-paper-100 px-4 py-2.5 text-sm text-ink-950 ring-1 ring-ink-950/10 placeholder:text-ink-900/40 focus:outline-none focus:ring-2 focus:ring-accent-200"
           />
           {tab === "stock" && (
@@ -693,7 +693,7 @@ export function InventoryView({
         )
       ) : shownBatches.length === 0 ? (
         <p className="rounded-2xl border-2 border-dashed border-brand-300 bg-paper-100 p-6 text-sm text-ink-900/70">
-          {query ? `Nothing matches “${query}”.` : "No production_runs yet."}
+          {query ? `Nothing matches “${query}”.` : "No batches yet."}
         </p>
       ) : (
         <ul className="grid gap-3 lg:grid-cols-2">
@@ -768,7 +768,7 @@ export function InventoryView({
                     Make a production_run
                   </button>
                   {/* Recipes define what things cost, so they are the owner's.
-                      Making a production_run is something that happened, so it is the
+                      Making a batch is something that happened, so it is the
                       shift's. */}
                   {canSeeCosts && (
                     <button

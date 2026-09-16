@@ -1,3 +1,4 @@
+import { brand } from "../../../config/index.ts";
 import Link from "next/link";
 import { RoleOffer } from "@/components/role-offer";
 import { getViewer, isConfigured } from "@/lib/auth";
@@ -73,8 +74,8 @@ export default async function AccountPage() {
 
         {p?.is_blocked && (
           <div className="mb-6 rounded-2xl bg-brand-700 px-5 py-4 text-sm font-semibold text-paper-50">
-            Ordering is paused on this account. Please contact us at
-            +63 947 353 3060 if you think this is a mistake.
+            Ordering is paused on this account. Please contact us at{" "}
+            {brand.contact.phone} if you think this is a mistake.
           </div>
         )}
 

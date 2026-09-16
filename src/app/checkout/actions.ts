@@ -1,5 +1,6 @@
 "use server";
 
+import { brand } from "../../../config/index.ts";
 import { createClient } from "@/lib/supabase/server";
 import { getSchedule } from "@/lib/hours-server";
 import { canScheduleFor, parseManilaLocal } from "@/lib/hours";
@@ -98,7 +99,7 @@ export async function placeOrder(
   if (profile?.is_blocked) {
     return {
       error:
-        "Ordering is paused on this account. Please contact us at +63 947 353 3060.",
+        `Ordering is paused on this account. Please contact us at ${brand.contact.phone}.`,
     };
   }
 

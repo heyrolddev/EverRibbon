@@ -287,7 +287,7 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
   out.materials = materials;
   out.material_lots = lots;
 
-  /* ---------------- production_runs, and their recipes ---------------- */
+  /* ---------------- batches, and their recipes ---------------- */
 
   const production_runs: unknown[] = [];
   const productionRunMaterials: unknown[] = [];
@@ -295,12 +295,12 @@ export function convertLegacyBackup(file: LegacyFile): ConvertResult {
   for (const r of rows(data, "batches")) {
     const productionRunId = id(r.id);
     if (!productionRunId) {
-      skipped.push("a production_run with no id");
+      skipped.push("a batch with no id");
       continue;
     }
     production_runs.push({
       id: productionRunId,
-      name: str(r.name) ?? "Unnamed production_run",
+      name: str(r.name) ?? "Unnamed batch",
       yield_qty: num(r.yieldQty),
       yield_unit: str(r.yieldUnit) ?? "g",
       run_stock: num(r.batchStock),

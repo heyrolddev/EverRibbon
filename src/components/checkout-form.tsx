@@ -1,4 +1,5 @@
 "use client";
+import { brand } from "../../config/index.ts";
 import { formatDateTimeFull, money } from "@/lib/format";
 
 import { useMemo, useState, type FormEvent } from "react";
@@ -586,7 +587,7 @@ export function CheckoutForm({
               </>
             ) : (
               <p className="mt-1 text-sm font-semibold text-ink-950">
-                In front of Palengkeni, beside Osave — Apalit
+                {brand.contact.street}, {brand.contact.locality}
               </p>
             )}
             <p className="mt-2 text-sm text-ink-900/70">

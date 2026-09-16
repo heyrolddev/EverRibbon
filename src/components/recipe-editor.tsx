@@ -18,7 +18,7 @@ export type RecipeOption = {
   id: string;
   name: string;
   unit: string;
-  /** ₱ per unit — for a material its cost, for a production_run its cost per yield unit. */
+  /** ₱ per unit — for a material its cost, for a batch its cost per yield unit. */
   unitCost: number;
   kind: "inv" | "production_run";
   /** How much is on hand, for the shortfall warning when producing. */
@@ -30,11 +30,11 @@ export type RecipeLine = { refType: "inv" | "production_run"; refId: string; qty
 /**
  * What goes into a thing.
  *
- * One editor for both products and production_runs, because they are the same shape —
+ * One editor for both products and batches, because they are the same shape —
  * a list of "this much of that" — and two of these would drift the day one
- * of them gained a feature. A product may draw on production_runs as well as
- * materials; a production_run may only use materials, since a production_run made of
- * production_runs is a recursion nobody at the stall asked for.
+ * of them gained a feature. A product may draw on batches as well as
+ * materials; a batch may only use materials, since a batch made of
+ * batches is a recursion nobody at the stall asked for.
  *
  * The running cost is the point of the screen. Editing a recipe without
  * seeing what it does to the cost is editing blind, and the number that
@@ -44,7 +44,7 @@ export type RecipeLine = { refType: "inv" | "production_run"; refId: string; qty
 export function RecipeEditor({
   title,
   subtitle,
-  /** Null when editing a production_run: a production_run has no selling price. */
+  /** Null when editing a batch: a batch has no selling price. */
   price,
   options,
   initial,
@@ -118,7 +118,7 @@ export function RecipeEditor({
             // The name gets its own row and the full width of the dialog.
             // Squeezed beside the quantity it truncated to "M.Chicken 100 (b"
             // and "T.O/ Noodles (ba", which on a menu full of near-identical
-            // production_run names is how the wrong thing gets picked — and on a phone
+            // batch names is how the wrong thing gets picked — and on a phone
             // the single row didn't fit at all.
             return (
               <li
@@ -203,7 +203,7 @@ export function RecipeEditor({
               {target.kind === "product"
                 ? "Costs to make"
                 : target.kind === "production_run"
-                  ? "Costs per production_run"
+                  ? "Costs per batch"
                   : target.kind === "packaging"
                     ? "Adds to a take-out"
                     : "Adds to every take-out order"}
@@ -254,7 +254,7 @@ export function RecipeEditor({
 }
 
 /**
- * Cook a production_run.
+ * Cook a batch.
  *
  * Shows the shopping list against what is actually on the shelf before
  * anything moves. It warns rather than refuses: the pepper may well have
@@ -319,7 +319,7 @@ export function ProduceBatchForm({
       busy={busy}
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="How many production_runs" hint={`One production_run makes ${production_run.yieldQty.toLocaleString(brand.locale)} ${production_run.yieldUnit}.`}>
+        <Field label="How many batches" hint={`One production_run makes ${production_run.yieldQty.toLocaleString(brand.locale)} ${production_run.yieldUnit}.`}>
           <input
             value={multiplier}
             onChange={(e) => setMultiplier(e.target.value)}

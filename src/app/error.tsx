@@ -1,6 +1,8 @@
 "use client";
 
+import { brand } from "../../config/index.ts";
 import { useEffect } from "react";
+import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { reportClientError } from "@/app/report-error";
 import Link from "next/link";
@@ -40,17 +42,20 @@ export default function AppError({
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-24">
       <div className="w-full max-w-lg rounded-3xl bg-paper-100 p-8 text-center ring-1 ring-ink-950/10">
-        <p className="font-display text-5xl">🍜</p>
-        <h1 className="mt-4 font-display text-3xl font-black text-ink-950">
+        {/* The shop's own mark rather than a picture of what it sells: this
+            page is the one screen where a customer needs to recognise where
+            they still are. */}
+        <Logo width={160} className="mx-auto h-auto w-[150px] text-ink-950" />
+        <h1 className="mt-5 font-display text-3xl font-black text-ink-950">
           Something went wrong
         </h1>
         <p className="mt-2 text-sm text-ink-900/70">
           Sorry — this page didn&apos;t load. It&apos;s us, not you. Try again,
-          or ring the stall and we&apos;ll sort it out.
+          or ring us and we&apos;ll sort it out.
         </p>
         <p className="mt-2 text-sm text-ink-900/70">
           <strong className="text-ink-950">Already ordered?</strong> Your order
-          is safe. This is only the page failing to draw, not the kitchen.
+          is safe. This is only the page failing to draw, nothing behind it.
         </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -64,13 +69,13 @@ export default function AppError({
             href="/menu"
             className="rounded-full bg-ink-950 px-6 py-3 text-sm font-bold text-paper-50 transition-transform hover:scale-105"
           >
-            Back to the menu
+            Back to the {brand.copy.catalogue.toLowerCase()}
           </Link>
           <a
-            href="tel:+639473533060"
+            href={`tel:${brand.contact.phoneHref}`}
             className="rounded-full bg-paper-200 px-6 py-3 text-sm font-bold text-ink-950 transition-transform hover:scale-105"
           >
-            Call the stall
+            Call us
           </a>
         </div>
 

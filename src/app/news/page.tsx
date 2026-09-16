@@ -1,3 +1,4 @@
+import { brand } from "../../../config/index.ts";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Reveal } from "@/components/reveal";
@@ -8,7 +9,7 @@ import type { Announcement } from "@/lib/announcements";
 
 export const metadata = {
   title: "News & promos",
-  description: "What's running at the stall right now, and what's new.",
+  description: "What's running right now, and what's new.",
 };
 
 // Same reason as the homepage: a promo whose window closes tonight has to come
@@ -22,7 +23,7 @@ export default async function NewsPage() {
   return (
     <main className="flex-1">
       <PageHeader
-        eyebrow="From the stall"
+        eyebrow="From the shop"
         title="News & promos"
         subtitle="What's running right now, and anything worth knowing before you come."
         compact
@@ -31,9 +32,9 @@ export default async function NewsPage() {
       <div className="mx-auto max-w-5xl px-6 py-16">
         {empty ? (
           <p className="rounded-3xl bg-paper-100 p-8 text-center text-ink-900/70 ring-1 ring-ink-950/10">
-            Nothing running at the moment — but the kitchen is. Have a look at{" "}
+            Nothing running at the moment — but we are. Have a look at{" "}
             <Link href="/menu" className="font-bold text-brand-700 underline">
-              the menu
+              the {brand.copy.catalogue.toLowerCase()}
             </Link>
             .
           </p>

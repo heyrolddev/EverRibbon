@@ -41,7 +41,7 @@ export type ResetScope = {
   /** Orders placed from an owner or staff account while testing. */
   staffOrders: boolean;
   /**
-   * Materials, their stock lots, production_runs, and every recipe built on them.
+   * Materials, their stock lots, batches, and every recipe built on them.
    *
    * Absent until the owner cleared the shop before a real import and found
    * the practice inventory still sitting there. The screen had promised to

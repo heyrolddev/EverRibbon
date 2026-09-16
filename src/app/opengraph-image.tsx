@@ -71,7 +71,7 @@ export default async function Image() {
             borderRadius: 999,
           }}
         >
-          MADE FRESH DAILY
+          {brand.copy.badge}
         </div>
 
         <div

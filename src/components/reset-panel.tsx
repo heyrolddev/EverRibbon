@@ -70,9 +70,9 @@ export function ResetPanel({ counts }: { counts: ResetCounts }) {
     },
     {
       key: "inventory",
-      label: "Inventory, production_runs and recipes",
+      label: "Inventory, batches and recipes",
       detail:
-        "Every material and its stock lots, every production_run, and the recipes built on them \u2014 plus the purchase, consumption and waste records that describe them. Products stay; they are left with no recipe.",
+        "Every material and its stock lots, every batch, and the recipes built on them \u2014 plus the purchase, consumption and waste records that describe them. Products stay; they are left with no recipe.",
       count: counts.materials + counts.production_runs,
     },
     {

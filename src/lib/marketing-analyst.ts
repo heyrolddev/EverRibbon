@@ -31,7 +31,7 @@ function hashtags(b: { key: string; contact: { locality: string } }): string {
 export type ShopSnapshot = {
   generatedAt: string;
   window: string;
-  revenue: { last30: number; prior30: number; avgOrder: number; currency: "PHP" };
+  revenue: { last30: number; prior30: number; avgOrder: number; currency: string };
   orders: { last30: number; prior30: number; cancelRate: number };
   fulfillment: { pickup: number; delivery: number; dineIn: number; deliveryFees: number };
   payments: { cod: number; gcash: number; unpaidGcash: number };
@@ -229,7 +229,7 @@ export async function analyseShop(
   if (repeatPct < 30 && s.customers.total >= 5) {
     ads.push({
       audience: "Retarget people who visited the site but didn't order",
-      hook: `Balik ka na — ${top ? top.name : "black pepper noodles"} pa rin ang paborito dito.`,
+      hook: `Balik ka na — ${top ? top.name : brand.copy.strip[0]} pa rin ang paborito dito.`,
       why: `Only ${repeatPct}% of your customers come back. Reaching people who already found you costs far less than finding new ones.`,
       budget: `${moneyRound(150)} over 5 days`,
     });

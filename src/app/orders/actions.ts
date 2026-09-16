@@ -1,5 +1,6 @@
 "use server";
 
+import { brand } from "../../../config/index.ts";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { extensionFor, uploadImage, validateImage } from "@/lib/storage";
@@ -7,7 +8,7 @@ import { syncStockForStatus } from "@/lib/stock-server";
 import { cartQuantityProblem } from "@/lib/orders";
 
 const NOT_EDITABLE =
-  "This order can no longer be changed — the kitchen has already started it. Please call us at +63 947 353 3060.";
+  `This order can no longer be changed — it is already in production. Please call us at ${brand.contact.phone}.`;
 
 function revalidateOrders() {
   revalidatePath("/orders");
