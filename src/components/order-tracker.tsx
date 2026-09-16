@@ -10,6 +10,17 @@ import { useOrderRealtime } from "@/lib/use-order-realtime";
 import { cancelMyOrder, submitPayment, updateMyOrder } from "@/app/orders/actions";
 import { LiveDotIcon } from "@/components/icons";
 import { OrderReviewPanel, type ReviewableItem } from "@/components/order-review-panel";
+import {
+  awaitingCustomer,
+  findStatus,
+  isCancellation,
+  isClosed,
+  isFulfilled,
+  needsShop,
+  railFor,
+  railIndex,
+  type OrderStatusRow,
+} from "@/lib/order-statuses";
 import { ReorderButton } from "@/components/reorder-button";
 import { EtaCountdown } from "@/components/eta-countdown";
 import {
@@ -52,33 +63,6 @@ export type TrackedOrder = {
 };
 
 /** The happy path, in order. `cancelled` deliberately sits outside it. */
-const STEPS = [
-  "pending",
-  "confirmed",
-  "preparing",
-  "ready",
-  "out_for_delivery",
-  "completed",
-] as const;
-
-type Step = (typeof STEPS)[number];
-
-/** Pickup orders never leave the stall, so that step isn't part of their rail. */
-const PICKUP_STEPS: readonly Step[] = STEPS.filter((s) => s !== "out_for_delivery");
-
-const STEP_COPY: Record<string, { label: string; blurb: string }> = {
-  pending: { label: "Placed", blurb: "We've got your order — waiting for the shop to confirm." },
-  confirmed: { label: "Confirmed", blurb: "Confirmed! It's queued for the kitchen." },
-  preparing: { label: "Cooking", blurb: "Your food is on the pan right now. 🔥" },
-  ready: { label: "Ready", blurb: "Your food is ready and waiting." },
-  // Overridden per fulfilment below — see readyBlurb.
-  out_for_delivery: {
-    label: "On the way",
-    blurb: "Your rider has left the stall — keep your phone nearby. 🛵",
-  },
-  completed: { label: "Done", blurb: "Enjoy! Salamat sa order. 🧡" },
-};
-
 /**
  * "Ready" is two different pieces of news depending on who is coming to whom.
  *
@@ -87,17 +71,30 @@ const STEP_COPY: Record<string, { label: string; blurb: string }> = {
  * number and will ring, so the useful instruction is to stop watching the page
  * and watch the phone. The countdown is gone by this point, and without a
  * replacement the page would just sit there saying "ready" with no next step.
+ *
+ * This is the one line the shop does not get to write, because it is about
+ * which way the goods are travelling rather than about what the shop makes.
  */
-function readyBlurb(fulfillment: string): string {
+function handoverBlurb(fulfillment: string): string {
   return fulfillment === "delivery"
     ? "Ready and waiting for a rider. They'll call or text you when they're close — keep your phone nearby. 📱"
     : `Ready for pickup! We're at ${brand.contact.street}, ${brand.contact.locality}.`;
 }
 
-
-function StatusRail({ status, fulfillment }: { status: string; fulfillment: string }) {
-  const steps: readonly Step[] = fulfillment === "delivery" ? STEPS : PICKUP_STEPS;
-  const current = steps.indexOf(status as Step);
+function StatusRail({
+  status,
+  fulfillment,
+  statuses,
+}: {
+  status: string;
+  fulfillment: string;
+  statuses: OrderStatusRow[];
+}) {
+  // The shop's own steps, in its own order. A rail of six names typed into
+  // this file drew a customer's progress bar with no lit segments on it for
+  // any shop that had named its steps differently.
+  const steps = railFor(statuses, fulfillment);
+  const current = railIndex(steps, status);
 
   return (
     <div className="flex items-center gap-1">
@@ -105,7 +102,7 @@ function StatusRail({ status, fulfillment }: { status: string; fulfillment: stri
         const done = i <= current;
         const active = i === current;
         return (
-          <div key={step} className="flex flex-1 flex-col items-center gap-1.5">
+          <div key={step.key} className="flex flex-1 flex-col items-center gap-1.5">
             <div className="flex w-full items-center">
               <span
                 className={`h-1 flex-1 rounded-full transition-colors ${
@@ -123,7 +120,7 @@ function StatusRail({ status, fulfillment }: { status: string; fulfillment: stri
               </motion.span>
               <span
                 className={`h-1 flex-1 rounded-full transition-colors ${
-                  i === STEPS.length - 1
+                  i === steps.length - 1
                     ? "bg-transparent"
                     : i < current
                       ? "bg-ok-600"
@@ -136,7 +133,7 @@ function StatusRail({ status, fulfillment }: { status: string; fulfillment: stri
                 done ? "text-ink-950" : "text-ink-900/40"
               }`}
             >
-              {STEP_COPY[step]?.label}
+              {step.label}
             </span>
           </div>
         );
@@ -145,7 +142,13 @@ function StatusRail({ status, fulfillment }: { status: string; fulfillment: stri
   );
 }
 
-function OrderCard({ order }: { order: TrackedOrder }) {
+function OrderCard({
+  order,
+  statuses,
+}: {
+  order: TrackedOrder;
+  statuses: OrderStatusRow[];
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [qtys, setQtys] = useState<Record<number, number>>(() =>
@@ -180,7 +183,7 @@ function OrderCard({ order }: { order: TrackedOrder }) {
     }
   }
 
-  const cancelled = order.status === "cancelled";
+  const cancelled = isCancellation(statuses, order.status);
   const editable = order.status === "pending";
   const balanceDue = Math.max(
     0,
@@ -252,7 +255,7 @@ function OrderCard({ order }: { order: TrackedOrder }) {
           </span>
         ) : (
           order.eta_minutes != null &&
-          !["completed", "cancelled"].includes(order.status) && (
+          needsShop(statuses, order.status) && (
             <EtaCountdown minutes={order.eta_minutes} from={order.eta_set_at} />
           )
         )}
@@ -266,11 +269,18 @@ function OrderCard({ order }: { order: TrackedOrder }) {
             </p>
           )}
 
-          <StatusRail status={order.status} fulfillment={order.fulfillment} />
+          <StatusRail
+            status={order.status}
+            fulfillment={order.fulfillment}
+            statuses={statuses}
+          />
           <p className="mt-4 text-center text-sm font-semibold text-ink-900">
-            {order.status === "ready"
-              ? readyBlurb(order.fulfillment)
-              : (STEP_COPY[order.status]?.blurb ?? "")}
+            {/* Made and waiting is the one step where WHERE matters more than
+                what, so the fulfilment decides it. Everything else is the
+                shop's own note, which it can change without a deploy. */}
+            {awaitingCustomer(statuses, order.status) && !isFulfilled(statuses, order.status)
+              ? handoverBlurb(order.fulfillment)
+              : (findStatus(statuses, order.status)?.customerNote ?? "")}
           </p>
         </div>
       )}
@@ -487,13 +497,13 @@ function OrderCard({ order }: { order: TrackedOrder }) {
 
       {/* Offered on anything that's finished — including a cancelled one,
           where wanting the same food again is exactly the recovery. */}
-      {(order.status === "completed" || cancelled) && (
+      {(isFulfilled(statuses, order.status) || cancelled) && (
         <div className="border-t border-ink-950/10 px-6 py-4">
           <ReorderButton orderId={order.id} />
         </div>
       )}
 
-      {order.status === "completed" && order.reviewable.length > 0 && (
+      {isFulfilled(statuses, order.status) && order.reviewable.length > 0 && (
         <OrderReviewPanel items={order.reviewable} />
       )}
 
@@ -572,14 +582,17 @@ function OrderCard({ order }: { order: TrackedOrder }) {
 export function OrderTracker({
   orders,
   customerId,
+  statuses,
 }: {
   orders: TrackedOrder[];
   customerId: string;
+  /** The shop's own steps, fetched on the server and handed down. */
+  statuses: OrderStatusRow[];
 }) {
   const { connected } = useOrderRealtime({ customerId });
 
-  const active = orders.filter((o) => !["completed", "cancelled"].includes(o.status));
-  const past = orders.filter((o) => ["completed", "cancelled"].includes(o.status));
+  const active = orders.filter((o) => !isClosed(statuses, o.status));
+  const past = orders.filter((o) => isClosed(statuses, o.status));
 
   return (
     <div className="flex flex-col gap-10">
@@ -611,7 +624,7 @@ export function OrderTracker({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.98 }}
                 >
-                  <OrderCard order={o} />
+                  <OrderCard order={o} statuses={statuses} />
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -619,7 +632,7 @@ export function OrderTracker({
         </section>
       )}
 
-      {past.length > 0 && <History orders={past} />}
+      {past.length > 0 && <History orders={past} statuses={statuses} />}
     </div>
   );
 }
@@ -635,7 +648,13 @@ export function OrderTracker({
  *
  * Orders still in flight are never folded: those are the reason to be here.
  */
-function History({ orders }: { orders: TrackedOrder[] }) {
+function History({
+  orders,
+  statuses,
+}: {
+  orders: TrackedOrder[];
+  statuses: OrderStatusRow[];
+}) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? orders : orders.slice(0, 1);
   const hidden = orders.length - shown.length;
@@ -645,7 +664,7 @@ function History({ orders }: { orders: TrackedOrder[] }) {
       <h2 className="font-display text-2xl font-black text-ink-950">History</h2>
       <ul className="mt-5 flex flex-col gap-5">
         {shown.map((o) => (
-          <OrderCard key={o.id} order={o} />
+          <OrderCard key={o.id} order={o} statuses={statuses} />
         ))}
       </ul>
 

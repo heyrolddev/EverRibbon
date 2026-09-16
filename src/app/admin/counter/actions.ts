@@ -1,4 +1,6 @@
 "use server";
+import { handedOverAt, workStartsAt } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { money } from "@/lib/format";
 
 import { revalidatePath } from "next/cache";
@@ -128,6 +130,15 @@ export async function recordWalkInSale(input: {
   const staffId = viewer!.profile?.id ?? null;
   const shift = staffId ? await openShiftFor(staffId) : null;
 
+  // Where a counter sale lands, asked of the shop's own steps. Two step names
+  // typed in here were a foreign key violation at the till on any shop that
+  // had named its steps differently — the sale simply would not save.
+  const statuses = await getOrderStatuses();
+  const tillStatus = input.toKitchen ? workStartsAt(statuses) : handedOverAt(statuses);
+  if (!tillStatus) {
+    return { error: "This shop has no step for a counter sale yet." };
+  }
+
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
@@ -139,7 +150,7 @@ export async function recordWalkInSale(input: {
       // Walk-ins are handed over and paid for at the counter, so the default
       // is a finished sale. Sending it to the kitchen is the busy-service
       // case, and then it's the board that says when it's done.
-      status: input.toKitchen ? "confirmed" : "completed",
+      status: tillStatus,
       // Dine-in is a real third thing, not a label: it's the case where
       // no container, no sauce cup and no bag leave the shelf, so the stock
       // engine and the costing both charge this order for food only.
@@ -189,7 +200,7 @@ export async function recordWalkInSale(input: {
   // engine overwrites `cogs` with what actually came off the shelf, lot
   // prices and all. Same column, refined — not two sources of truth.
   await recordOrderCost(order.id);
-  await syncStockForStatus(order.id, input.toKitchen ? "confirmed" : "completed");
+  await syncStockForStatus(order.id, tillStatus);
 
   /**
    * On the record, and this is the line that was missing.

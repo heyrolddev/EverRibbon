@@ -1,6 +1,12 @@
 "use server";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
-import { keysOf, type OrderStatus } from "@/lib/order-statuses";
+import {
+  isCancellation,
+  keysOf,
+  needsShop,
+  type OrderStatus,
+  type OrderStatusRow,
+} from "@/lib/order-statuses";
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -36,18 +42,15 @@ function revalidateOrders() {
  * the shop's cooking estimate says nothing about when a rider will arrive;
  * only the rider knows that, and they will ring.
  */
-const ETA_IS_OVER: OrderStatus[] = [
-  "ready",
-  "out_for_delivery",
-  "completed",
-  "cancelled",
-];
+const etaIsOver = (statuses: OrderStatusRow[], key: OrderStatus): boolean =>
+  !needsShop(statuses, key);
+
 
 /**
  * Who did this, on the record.
  *
  * Counter sales already carried `logged_by`, so a walk-in has always had a
- * name on it. An online order did not: moving one to "completed", or marking
+ * name on it. An online order did not: handing one over, or marking
  * a customer's GCash payment as received, changed the row and left nothing
  * saying who decided it. Those are the two moments most worth being able to
  * ask about later — one hands over food, the other says money arrived — and
@@ -98,7 +101,8 @@ export async function setOrderStatus(
    */
   reason?: string
 ): Promise<{ error: string | null }> {
-  if (!keysOf(await getOrderStatuses()).includes(status)) {
+  const statuses = await getOrderStatuses();
+  if (!keysOf(statuses).includes(status)) {
     return { error: "Unknown status." };
   }
 
@@ -106,7 +110,7 @@ export async function setOrderStatus(
   if (!can(viewer, "orders")) return { error: "Not allowed." };
   if (await offShift(viewer)) return { error: NOT_ON_SHIFT };
 
-  const why = status === "cancelled" ? cleanReason(reason) : null;
+  const why = isCancellation(statuses, status) ? cleanReason(reason) : null;
   if (why?.error) return { error: why.error };
 
   const supabase = await createClient();
@@ -120,14 +124,14 @@ export async function setOrderStatus(
       // updates would leave a window where the order is ready and the clock
       // is still counting, and that window is exactly when the customer is
       // looking.
-      ...(ETA_IS_OVER.includes(status)
+      ...(etaIsOver(statuses, status)
         ? { eta_minutes: null, eta_set_at: null }
         : {}),
       // Stamped in the same write as the status, so there is no moment where
       // an order is cancelled and nobody owns it. Cleared when an order is
       // moved back off cancelled — a stale "cancelled by" on a live order is
       // a worse record than none.
-      ...(status === "cancelled"
+      ...(isCancellation(statuses, status)
         ? {
             cancelled_reason: why!.reason,
             cancelled_by: viewer?.profile?.id ?? null,

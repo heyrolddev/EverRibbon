@@ -19,6 +19,9 @@ import {
   toneClasses,
   type OrderStatus,
   type OrderStatusRow,
+  isCancellation,
+  isFulfilled,
+  needsShop,
 } from "@/lib/order-statuses";
 import { OrderBoard, type View } from "@/components/order-board";
 import { Foldable } from "@/components/foldable";
@@ -97,7 +100,7 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
             {/* The confirmation when completing is a moment and it can be
                 clicked through. This stays until the money is settled, which
                 is what actually gets it chased. */}
-            {o.status === "completed" && payment.balance > 0 && (
+            {isFulfilled(statuses, o.status) && payment.balance > 0 && (
               <span className="rounded-full bg-brand-700 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-paper-50">
                 ⚠ {money(payment.balance)} unpaid
               </span>
@@ -175,9 +178,10 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
               moment the answer is "it is". Setting the status to ready clears
               the stored ETA too — this just stops offering a control that can
               only produce a wrong promise. */}
-          {!["ready", "out_for_delivery", "completed", "cancelled"].includes(
-            o.status
-          ) && (
+          {/* Only while the shop still has work to do on it. Four step
+              names typed in here kept offering the control on shops whose
+              steps are called something else. */}
+          {needsShop(statuses, o.status) && (
             <span className="flex items-center gap-2">
               {o.eta_minutes != null && (
                 <EtaCountdown
@@ -255,7 +259,8 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
         </p>
       )}
 
-      {o.status === "cancelled" && (o.cancelled_reason || o.cancelled_by_name) && (
+      {isCancellation(statuses, o.status) &&
+        (o.cancelled_reason || o.cancelled_by_name) && (
         <p className="mt-3 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
           <span className="font-bold">Cancelled</span>
           {o.cancelled_by_name ? ` by ${o.cancelled_by_name}` : ""}

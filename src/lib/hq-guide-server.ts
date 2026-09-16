@@ -1,3 +1,5 @@
+import { isOpen } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { formatDate, money, moneyRound } from "./format.ts";
 import "server-only";
 import { loadMoney } from "@/lib/money-server";
@@ -384,7 +386,8 @@ async function today(): Promise<string> {
   const live = rows.filter((o) => o.status !== "cancelled");
   const revenue = live.reduce((s, o) => s + (Number(o.revenue) || 0), 0);
   const cogs = live.reduce((s, o) => s + (Number(o.cogs) || 0), 0);
-  const open = live.filter((o) => !["completed", "cancelled"].includes(o.status)).length;
+  const statuses = await getOrderStatuses();
+  const open = live.filter((o) => isOpen(statuses, o.status)).length;
 
   if (live.length === 0) {
     return `Nothing rung up yet today (${date}). The Today screen will fill in as orders come through.`;

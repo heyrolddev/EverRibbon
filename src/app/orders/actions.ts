@@ -1,5 +1,7 @@
 "use server";
 
+import { cancellationKeys } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { brand } from "../../../config/index.ts";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -31,10 +33,14 @@ export async function cancelMyOrder(
   } = await supabase.auth.getUser();
   if (!user) return { error: "You need to sign in first." };
 
+  // Whichever step this shop calls "did not happen".
+  const cancelStep = cancellationKeys(await getOrderStatuses())[0];
+  if (!cancelStep) return { error: "This shop has no cancelled step." };
+
   const { data, error } = await supabase
     .from("orders")
     .update({
-      status: "cancelled",
+      status: cancelStep,
       cancelled_reason: reason.trim() || "Cancelled by the customer",
       // Stamped here too, so "who cancelled this" has one answer wherever the
       // cancellation came from. Without it the shop's cancellations were
@@ -54,7 +60,7 @@ export async function cancelMyOrder(
   // pending order has never had stock deducted — so this is a no-op today.
   // It is here anyway: the day that rule is relaxed, the alternative is
   // materials quietly staying deducted for an order nobody is making.
-  await syncStockForStatus(orderId, "cancelled");
+  await syncStockForStatus(orderId, cancelStep);
 
   revalidateOrders();
   return { error: null };

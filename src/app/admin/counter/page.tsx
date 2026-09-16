@@ -1,3 +1,5 @@
+import { cancellationKeys } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { shopToday } from "@/lib/format";
 import { getViewer, isStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,7 +29,7 @@ export default async function AdminCounterPage() {
       .select("revenue")
       .eq("tag", "walk-in")
       .eq("date", shopToday())
-      .neq("status", "cancelled"),
+      .not("status", "in", `(${cancellationKeys(await getOrderStatuses()).join(",")})`),
     supabase
       .from("catalog_categories")
       .select("name, colour, sort_order")

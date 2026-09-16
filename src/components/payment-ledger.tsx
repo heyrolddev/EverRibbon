@@ -5,7 +5,14 @@ import { useMemo, useState } from "react";
 import { AdminSearch } from "@/components/admin-search";
 import { Foldable } from "@/components/foldable";
 import { PaymentVerifier } from "@/components/payment-verifier";
-import { labelOf, toneOf, toneClasses, type OrderStatus, type OrderStatusRow } from "@/lib/order-statuses";
+import {
+  isFulfilled,
+  labelOf,
+  toneOf,
+  toneClasses,
+  type OrderStatus,
+  type OrderStatusRow,
+} from "@/lib/order-statuses";
 import {
   METHOD_LABEL,
   isOutstanding,
@@ -79,7 +86,9 @@ function Row({ row, startOpen, statuses }: { row: LedgerRow; startOpen: boolean;
   const m = moneyState(row);
   const tone = toneClasses(toneOf(statuses, row.status));
   const who = row.contact_name || "Walk-in";
-  const stuck = row.status === "completed" && m.balance > 0;
+  // Handed over with money still owed. Keyed to the step that means handover
+  // rather than to the word "completed", which one shop in two does not have.
+  const stuck = isFulfilled(statuses, row.status) && m.balance > 0;
 
   return (
     <Foldable

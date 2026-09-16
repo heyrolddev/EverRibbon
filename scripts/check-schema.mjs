@@ -124,6 +124,34 @@ const behaviours = [
   }, "58.6",
    "The product path must be unchanged: 48.6 from the custom line plus 2 x 5."],
 
+  ["revenue survives a shop that has no step called 'completed'", () => {
+    // The whole point of 0014. Seed the made-to-order steps, put a delivered
+    // order behind a customer, and ask the view what they have spent. Keyed
+    // to the name, this returns 0 — a busy shop reporting no sales, with
+    // nothing in any log to say why.
+    psql(["-f", "supabase/seeds/made-to-order-statuses.sql"]);
+    psql(["-c", `
+      insert into auth.users (id) values ('11111111-1111-1111-1111-111111111111')
+        on conflict (id) do nothing;
+      insert into profiles (id, role) values
+        ('11111111-1111-1111-1111-111111111111', 'customer')
+        on conflict (id) do nothing;
+      insert into orders (id, date, status, customer_id, revenue)
+        values ('ord_spend', current_date, 'delivered',
+                '11111111-1111-1111-1111-111111111111', 1742.25);
+      insert into order_lines (order_id, product_id, qty, price_at_sale, label)
+        values ('ord_spend', null, 1, 1742.25, 'Graduation bouquet');
+    `]);
+    return scalar("select total_spent::numeric(10,2) from customer_order_stats " +
+                  "where customer_id = '11111111-1111-1111-1111-111111111111'");
+  }, "1742.25",
+   "Lifetime spend, best-seller lists and the review gate all hang off this."],
+
+  ["every shop's steps name exactly one that means 'they have it'", () => {
+    return scalar("select count(*) from order_statuses where is_fulfilled");
+  }, "1",
+   "None means no order ever counts as a sale; two means revenue is counted twice."],
+
   ["a line that is neither a product nor a description is refused", () => {
     try {
       psql(["-c", "insert into order_lines (order_id, product_id, qty, price_at_sale) " +

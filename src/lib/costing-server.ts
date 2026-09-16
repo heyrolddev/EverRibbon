@@ -1,3 +1,5 @@
+import { cancellationKeys } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -222,7 +224,9 @@ export async function loadSalesVolume(
     .from("order_lines")
     .select("product_id, qty, orders!inner(date, status)")
     .gte("orders.date", since)
-    .neq("orders.status", "cancelled");
+    // Cancelled work never happened, so it never cost anything. Which step
+    // means cancelled is the shop's to name.
+    .not("orders.status", "in", `(${cancellationKeys(await getOrderStatuses()).join(",")})`);
   if (error) {
     console.error(`[costing] sales volume: ${error.message}`);
     return new Map();

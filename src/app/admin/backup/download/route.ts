@@ -1,3 +1,5 @@
+import { fulfilledKeys } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { brand } from "../../../../../config/index.ts";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -223,6 +225,9 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: false }),
       supabase.from("orders").select("customer_id, status, revenue").not("customer_id", "is", null),
     ]);
+    // Which step means "they have it" is the shop's to name, so it is asked
+    // rather than matched against a word.
+    const fulfilled = new Set(fulfilledKeys(await getOrderStatuses()));
     const stats = new Map<string, { orders: number; spent: number; last: string }>();
     for (const o of (orders ?? []) as {
       customer_id: string;
@@ -231,7 +236,8 @@ export async function GET(request: NextRequest) {
     }[]) {
       const cur = stats.get(o.customer_id) ?? { orders: 0, spent: 0, last: "" };
       cur.orders += 1;
-      if (o.status === "completed") cur.spent += Number(o.revenue) || 0;
+      // Only orders that actually reached the customer count as spend.
+      if (fulfilled.has(o.status)) cur.spent += Number(o.revenue) || 0;
       stats.set(o.customer_id, cur);
     }
     return file(

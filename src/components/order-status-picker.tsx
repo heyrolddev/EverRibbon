@@ -3,7 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setOrderStatus } from "@/app/admin/orders/actions";
-import { statusesFor, type OrderStatus, type OrderStatusRow } from "@/lib/order-statuses";
+import {
+  cancellationKeys,
+  isCancellation,
+  isFulfilled,
+  statusesFor,
+  type OrderStatus,
+  type OrderStatusRow,
+} from "@/lib/order-statuses";
 import { moneyLine, type MoneyState } from "@/lib/payments";
 import { hqTitle } from "@/lib/hq-theme";
 import { CANCEL_REASONS, REASON_LIMIT } from "@/lib/cancellation";
@@ -32,14 +39,17 @@ export function OrderStatusPicker({
   // a yes/no — there is something to say before it can go through.
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState<string>("");
+  // Whichever step this shop calls "did not happen". The dialog is opened by
+  // picking it, so there is always one by the time this is read.
+  const cancelStep = cancellationKeys(statuses)[0] ?? "cancelled";
   const [detail, setDetail] = useState("");
 
   /**
-   * Completing an order that still owes money is the one status change worth
-   * interrupting. It's the moment the food leaves the shop's hands, and after
-   * it the order drops off the open queue — so an unpaid balance stops being
-   * something anyone is looking at. Asking here costs a tap; not asking costs
-   * the price of the product.
+   * Handing over an order that still owes money is the one status change
+   * worth interrupting. It is the moment the goods leave the shop's hands,
+   * and after it the order drops off the open queue — so an unpaid balance
+   * stops being something anyone is looking at. Asking here costs a tap; not
+   * asking costs the price of the goods.
    *
    * It asks rather than refuses: a customer handing over cash at the counter
    * is normal, and the shop is right to complete that order. It just has to be
@@ -48,14 +58,14 @@ export function OrderStatusPicker({
   function attempt(next: OrderStatus) {
     // Cancelling is the one change that takes money back out of the drawer,
     // and it used to leave nothing behind. It asks now.
-    if (next === "cancelled") {
+    if (isCancellation(statuses, next)) {
       setReason("");
       setDetail("");
       setError(null);
       setCancelling(true);
       return;
     }
-    if (next === "completed" && money && money.balance > 0) {
+    if (isFulfilled(statuses, next) && money && money.balance > 0) {
       setConfirming(next);
       return;
     }
@@ -152,7 +162,10 @@ export function OrderStatusPicker({
               <button
                 disabled={!reason || pending}
                 onClick={() =>
-                  change("cancelled", detail.trim() ? `${reason} — ${detail.trim()}` : reason)
+                  change(
+                    cancelStep,
+                    detail.trim() ? `${reason} — ${detail.trim()}` : reason
+                  )
                 }
                 className="rounded-full bg-brand-700 px-6 py-3 text-sm font-black text-paper-50 transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
               >

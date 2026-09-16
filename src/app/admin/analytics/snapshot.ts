@@ -1,3 +1,6 @@
+import { isCancellation, isFulfilled } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { tallyName } from "@/lib/order-lines";
 import { brand } from "../../../../config/index.ts";
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
@@ -57,7 +60,7 @@ export async function buildSnapshot(): Promise<ShopSnapshot> {
       .gte("date", d60),
     supabase
       .from("order_lines")
-      .select("qty, price_at_sale, products(name), orders!inner(date, status)")
+      .select("qty, price_at_sale, label, products(name), orders!inner(date, status)")
       .gte("orders.date", d30),
     supabase.from("products").select("name, price, is_available").eq("is_public", true),
     supabase.from("reviews").select("rating, comment, created_at").eq("is_hidden", false),
@@ -66,24 +69,32 @@ export async function buildSnapshot(): Promise<ShopSnapshot> {
   ]);
 
   const orders = (ordersRes.data ?? []) as OrderRow[];
-  const live = orders.filter((o) => o.status !== "cancelled");
+  const statuses = await getOrderStatuses();
+  const live = orders.filter((o) => !isCancellation(statuses, o.status));
   const last30 = live.filter((o) => o.date >= d30);
   const prior30 = live.filter((o) => o.date < d30);
 
   const sum = (rows: OrderRow[]) => rows.reduce((s, o) => s + Number(o.revenue || 0), 0);
-  const completed = last30.filter((o) => o.status === "completed");
+  // The revenue line. Keyed to the name "completed" this read zero for every
+  // shop whose last step is called anything else — a busy month reporting no
+  // sales, which looks like a quiet month rather than a bug.
+  const completed = last30.filter((o) => isFulfilled(statuses, o.status));
 
   // --- items -------------------------------------------------------------
   type Line = {
     qty: number;
     price_at_sale: number;
+    label: string | null;
     products: { name: string } | null;
     orders: { status: string } | null;
   };
   const tally = new Map<string, { qty: number; revenue: number }>();
   for (const line of (linesRes.data ?? []) as unknown as Line[]) {
-    if (line.orders?.status === "cancelled") continue;
-    const name = line.products?.name ?? "Unknown item";
+    if (line.orders && isCancellation(statuses, line.orders.status)) continue;
+    // Custom jobs are counted together: each one is a single bespoke thing
+    // for a single customer, and a best-sellers list made of them has no best
+    // seller in it. The revenue still lands, under one heading.
+    const name = tallyName(line);
     const cur = tally.get(name) ?? { qty: 0, revenue: 0 };
     cur.qty += Number(line.qty);
     cur.revenue += Number(line.qty) * Number(line.price_at_sale);
@@ -153,7 +164,11 @@ export async function buildSnapshot(): Promise<ShopSnapshot> {
       prior30: prior30.length,
       cancelRate:
         orders.length > 0
-          ? Math.round((orders.filter((o) => o.status === "cancelled").length / orders.length) * 100)
+          ? Math.round(
+              (orders.filter((o) => isCancellation(statuses, o.status)).length /
+                orders.length) *
+                100
+            )
           : 0,
     },
     fulfillment: {

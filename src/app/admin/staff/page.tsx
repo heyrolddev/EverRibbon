@@ -1,3 +1,5 @@
+import { isCancellation } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { can, getViewer } from "@/lib/auth";
 import { SHOP_ROLES } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -69,6 +71,7 @@ export default async function AdminStaffPage() {
     .select("id, shift_id, revenue, status, payment_method")
     .in("shift_id", shiftRows.map((s) => s.id).length ? shiftRows.map((s) => s.id) : ["none"]);
 
+  const statuses = await getOrderStatuses();
   const salesByShift = new Map<string, { count: number; total: number; cash: number }>();
   for (const o of (orders ?? []) as {
     shift_id: string | null;
@@ -76,7 +79,7 @@ export default async function AdminStaffPage() {
     status: string;
     payment_method: string;
   }[]) {
-    if (!o.shift_id || o.status === "cancelled") continue;
+    if (!o.shift_id || isCancellation(statuses, o.status)) continue;
     const cur = salesByShift.get(o.shift_id) ?? { count: 0, total: 0, cash: 0 };
     cur.count += 1;
     cur.total += Number(o.revenue) || 0;

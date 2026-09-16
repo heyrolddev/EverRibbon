@@ -15,7 +15,9 @@ export const getOrderStatuses = cache(async (): Promise<OrderStatusRow[]> => {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_statuses")
-    .select("key, label, sort_order, is_open, is_gate, delivery_only, commits_stock, tone, hint")
+    // One string literal, not a concatenation: the column list is what the
+    // client infers the row type from, and a joined string infers as nothing.
+    .select("key, label, sort_order, is_open, is_gate, delivery_only, commits_stock, is_fulfilled, is_cancellation, awaiting_customer, customer_note, tone, hint")
     .order("sort_order");
 
   // A database that has not run migration 0007 has no such table. Falling back
@@ -32,6 +34,10 @@ export const getOrderStatuses = cache(async (): Promise<OrderStatusRow[]> => {
     isGate: Boolean(r.is_gate),
     deliveryOnly: Boolean(r.delivery_only),
     commitsStock: Boolean(r.commits_stock),
+    isFulfilled: Boolean(r.is_fulfilled),
+    isCancellation: Boolean(r.is_cancellation),
+    awaitingCustomer: Boolean(r.awaiting_customer),
+    customerNote: r.customer_note == null ? null : String(r.customer_note),
     tone: (r.tone ?? "ink") as StatusTone,
     hint: r.hint == null ? null : String(r.hint),
   }));

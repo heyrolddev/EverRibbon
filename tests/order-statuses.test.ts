@@ -4,6 +4,16 @@ import {
   FALLBACK_STATUSES, keysOf, openKeys, gateKeys, committedKeys,
   labelOf, toneOf, isOpen, isGate, statusesFor, toneClasses, STATUS_TONES,
   type OrderStatusRow,
+  fulfilledKeys,
+  isFulfilled,
+  cancellationKeys,
+  isCancellation,
+  needsShop,
+  awaitingCustomer,
+  railFor,
+  railIndex,
+  workStartsAt,
+  handedOverAt,
 } from "../src/lib/order-statuses.ts";
 
 /**
@@ -14,24 +24,29 @@ import {
 
 /** The flow a made-to-order shop actually runs — see the seed. */
 const RIBBON: OrderStatusRow[] = [
-  { key: "inquiry",       label: "Inquiry",       sortOrder: 10,  isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: false, tone: "ink",    hint: null },
-  { key: "agreed",        label: "Agreed",        sortOrder: 30,  isOpen: true,  isGate: true,  deliveryOnly: false, commitsStock: false, tone: "accent", hint: "Waiting on the deposit." },
-  { key: "deposit_paid",  label: "Deposit paid",  sortOrder: 40,  isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true,  tone: "ok",     hint: null },
-  { key: "proof_sent",    label: "Proof sent",    sortOrder: 50,  isOpen: true,  isGate: true,  deliveryOnly: false, commitsStock: true,  tone: "accent", hint: null },
-  { key: "in_production", label: "In production", sortOrder: 70,  isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true,  tone: "brand",  hint: null },
-  { key: "delivered",     label: "Delivered",     sortOrder: 100, isOpen: false, isGate: false, deliveryOnly: true,  commitsStock: true,  tone: "ink",    hint: null },
-  { key: "cancelled",     label: "Cancelled",     sortOrder: 110, isOpen: false, isGate: false, deliveryOnly: false, commitsStock: false, tone: "bad",    hint: null },
+  { key: "inquiry",       label: "Inquiry",       sortOrder: 10,  isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: false, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "ink",    hint: null },
+  { key: "agreed",        label: "Agreed",        sortOrder: 30,  isOpen: true,  isGate: true,  deliveryOnly: false, commitsStock: false, isFulfilled: false, isCancellation: false, awaitingCustomer: true, customerNote: null, tone: "accent", hint: "Waiting on the deposit." },
+  { key: "deposit_paid",  label: "Deposit paid",  sortOrder: 40,  isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true,  isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "ok",     hint: null },
+  { key: "proof_sent",    label: "Proof sent",    sortOrder: 50,  isOpen: true,  isGate: true,  deliveryOnly: false, commitsStock: true,  isFulfilled: false, isCancellation: false, awaitingCustomer: true, customerNote: null, tone: "accent", hint: null },
+  { key: "in_production", label: "In production", sortOrder: 70,  isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true,  isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "brand",  hint: null },
+  // A shop that ships adds this; one that hands over at the counter does not.
+  { key: "shipped",       label: "Shipped",       sortOrder: 95,  isOpen: true,  isGate: false, deliveryOnly: true,  commitsStock: true,  isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "ink",    hint: null },
+  { key: "delivered",     label: "Delivered",     sortOrder: 100, isOpen: false, isGate: false, deliveryOnly: false,  commitsStock: true,  isFulfilled: true, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "ink",    hint: null },
+  { key: "cancelled",     label: "Cancelled",     sortOrder: 110, isOpen: false, isGate: false, deliveryOnly: false, commitsStock: false, isFulfilled: false, isCancellation: true, awaitingCustomer: false, customerNote: null, tone: "bad",    hint: null },
 ];
 
 test("the steps come back in the order the shop works through them", () => {
   const shuffled = [...RIBBON].reverse();
   assert.deepEqual(keysOf(shuffled), [
-    "inquiry", "agreed", "deposit_paid", "proof_sent", "in_production", "delivered", "cancelled",
+    "inquiry", "agreed", "deposit_paid", "proof_sent", "in_production",
+    "shipped", "delivered", "cancelled",
   ]);
 });
 
 test("what is still owed is asked of the data, not of a second list", () => {
-  assert.deepEqual(openKeys(RIBBON), ["inquiry", "agreed", "deposit_paid", "proof_sent", "in_production"]);
+  assert.deepEqual(openKeys(RIBBON), [
+    "inquiry", "agreed", "deposit_paid", "proof_sent", "in_production", "shipped",
+  ]);
   assert.equal(isOpen(RIBBON, "delivered"), false);
   assert.equal(isOpen(RIBBON, "in_production"), true);
 });
@@ -50,7 +65,7 @@ test("stock is committed from the shop's own step, not from a name in the code",
    * build: nothing would fail, the counts would just read high.
    */
   assert.deepEqual(committedKeys(RIBBON),
-    ["deposit_paid", "proof_sent", "in_production", "delivered"]);
+    ["deposit_paid", "proof_sent", "in_production", "shipped", "delivered"]);
   assert.equal(committedKeys(RIBBON).includes("agreed"), false,
     "an agreement with no deposit has not cut any ribbon");
 });
@@ -61,8 +76,8 @@ test("a pick-up is never offered a delivery step", () => {
   // an address nobody has.
   const pickup = statusesFor(RIBBON, "pickup").map((r) => r.key);
   const delivery = statusesFor(RIBBON, "delivery").map((r) => r.key);
-  assert.equal(pickup.includes("delivered"), false);
-  assert.equal(delivery.includes("delivered"), true);
+  assert.equal(pickup.includes("shipped"), false);
+  assert.equal(delivery.includes("shipped"), true);
 });
 
 test("an unknown status renders as itself rather than as blank", () => {
@@ -93,4 +108,70 @@ test("the fallback is a working flow, not an empty one", () => {
     assert.ok(STATUS_TONES.includes(r.tone), `${r.key} has tone "${r.tone}"`);
     assert.match(r.key, /^[a-z][a-z0-9_]*$/, `${r.key} must match the database's key shape`);
   }
+});
+
+/**
+ * The bug these guard against was found twice, and the second time it was in
+ * the database as well as the app: two step names — 'completed' and
+ * 'cancelled' — were doing semantic work in about twenty places. On a shop
+ * whose last step is called 'delivered', every one of them matched nothing.
+ *
+ * Nothing errored. Revenue read zero, every customer read as a first-timer,
+ * no purchase could be reviewed, and the dashboard reported that nothing
+ * needed doing with a full board behind it. All of which looks like a quiet
+ * shop rather than a broken one, which is why it survived.
+ */
+
+test("a shop that has no step called 'completed' still earns revenue", () => {
+  assert.deepEqual(fulfilledKeys(RIBBON), ["delivered"]);
+  assert.ok(isFulfilled(RIBBON, "delivered"));
+  assert.ok(!isFulfilled(RIBBON, "completed"), "a step it does not have");
+  assert.ok(!isFulfilled(RIBBON, "in_production"), "not finished is not fulfilled");
+});
+
+test("a shop names its own cancellation", () => {
+  assert.deepEqual(cancellationKeys(RIBBON), ["cancelled"]);
+  assert.ok(isCancellation(RIBBON, "cancelled"));
+  assert.ok(!isCancellation(RIBBON, "delivered"));
+});
+
+test("whose move it is splits the open steps, and misses none", () => {
+  const open = RIBBON.filter((r) => r.isOpen).map((r) => r.key);
+  const mine = open.filter((k) => needsShop(RIBBON, k));
+  const theirs = open.filter((k) => awaitingCustomer(RIBBON, k));
+  // Every open order is on somebody. A step on neither list is an order
+  // nobody is looking at, which is how one sits for a week.
+  assert.deepEqual([...mine, ...theirs].sort(), [...open].sort());
+  assert.ok(mine.includes("in_production"), "making it is the shop's move");
+  assert.ok(mine.includes("shipped"), "in transit is still on the shop");
+  assert.ok(theirs.includes("proof_sent"), "an unapproved proof is theirs");
+});
+
+test("the customer's rail is the shop's own steps, without the cancellation", () => {
+  const rail = railFor(RIBBON, "pickup").map((r) => r.key);
+  assert.ok(!rail.includes("cancelled"), "not a milestone to look forward to");
+  // The rail has to end somewhere the customer is glad to arrive at.
+  assert.equal(rail.at(-1), "delivered");
+  assert.deepEqual(rail, [
+    "inquiry", "agreed", "deposit_paid", "proof_sent", "in_production", "delivered",
+  ]);
+  // The same shop, shipping: one more milestone, in its place.
+  assert.deepEqual(railFor(RIBBON, "delivery").map((r) => r.key), [
+    "inquiry", "agreed", "deposit_paid", "proof_sent", "in_production",
+    "shipped", "delivered",
+  ]);
+  assert.equal(railIndex(railFor(RIBBON, "pickup"), "proof_sent"), 3);
+});
+
+test("a step that is not on the rail reports as nowhere, not as the start", () => {
+  // -1, so the progress bar draws nothing lit rather than lighting the first
+  // segment and telling the customer their order has begun when it has not.
+  assert.equal(railIndex(railFor(RIBBON, "pickup"), "cancelled"), -1);
+});
+
+test("the till finds a step to sell into on either shop", () => {
+  assert.equal(workStartsAt(RIBBON), "deposit_paid");
+  assert.equal(handedOverAt(RIBBON), "delivered");
+  assert.equal(workStartsAt(FALLBACK_STATUSES), "confirmed");
+  assert.equal(handedOverAt(FALLBACK_STATUSES), "completed");
 });

@@ -1,3 +1,11 @@
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import {
+  awaitingCustomer,
+  openKeys,
+  isCancellation,
+  isFulfilled,
+  needsShop,
+} from "@/lib/order-statuses";
 import { formatDateTime, money, shopToday } from "@/lib/format";
 import { brand } from "../../../config/index.ts";
 import Link from "next/link";
@@ -79,7 +87,8 @@ export default async function AdminDashboard({
     rangeFrom <= rangeTo ? [rangeFrom, rangeTo] : [rangeTo, rangeFrom];
   const customRange = fromDate !== monthStart || toDate !== todayStr;
 
-  const [ordersRes, customersRes, leadsRes] = await Promise.all([
+  const [statuses, ordersRes, customersRes, leadsRes] = await Promise.all([
+    getOrderStatuses(),
     supabase
       .from("orders")
       .select(
@@ -99,8 +108,9 @@ export default async function AdminDashboard({
   const waitingLeads = leadsRes.error ? 0 : (leadsRes.count ?? 0);
 
   const orders = (ordersRes.data ?? []) as OrderRow[];
-  // Cancelled orders are excluded from every money figure — they earned nothing.
-  const live = orders.filter((o) => o.status !== "cancelled");
+  // Cancelled orders are excluded from every money figure — they earned
+  // nothing. Which step means cancelled is the shop's to name.
+  const live = orders.filter((o) => !isCancellation(statuses, o.status));
 
   const sum = (rows: OrderRow[]) => rows.reduce((s, o) => s + Number(o.revenue || 0), 0);
   // What was left after materials. `cogs` is snapshotted onto each order at
@@ -136,15 +146,16 @@ export default async function AdminDashboard({
     .toISOString()
     .slice(0, 10);
   const inPrevRange = live.filter((o) => o.date >= prevFrom && o.date <= prevTo);
-  const needsAction = orders.filter((o) =>
-    ["pending", "confirmed", "preparing"].includes(o.status)
-  );
-  const readyNow = orders.filter((o) => o.status === "ready");
+  // Split by whose move it is rather than by three step names. The old list
+  // matched nothing on a shop whose steps are called something else, so the
+  // tile read "nothing to do" with a full board behind it.
+  const needsAction = orders.filter((o) => needsShop(statuses, o.status));
+  const readyNow = orders.filter((o) => awaitingCustomer(statuses, o.status));
 
-  const completed = live.filter((o) => o.status === "completed");
+  const completed = live.filter((o) => isFulfilled(statuses, o.status));
   const avgOrder = completed.length > 0 ? sum(completed) / completed.length : 0;
 
-  const cancelled = orders.filter((o) => o.status === "cancelled");
+  const cancelled = orders.filter((o) => isCancellation(statuses, o.status));
   const cancelRate =
     orders.length > 0 ? Math.round((cancelled.length / orders.length) * 100) : 0;
 
@@ -171,7 +182,7 @@ export default async function AdminDashboard({
   // GCash payments the customer says they sent but nobody has checked yet —
   // money the shop may be owed, so it gets its own alert tile.
   const awaitingPayment = orders.filter(
-    (o) => o.payment_status === "submitted" && o.status !== "cancelled"
+    (o) => o.payment_status === "submitted" && !isCancellation(statuses, o.status)
   );
 
   // Read here rather than inside the panel: this is the owner's dashboard and
@@ -389,11 +400,16 @@ async function ServiceBoard({
 }) {
   const supabase = await createClient();
 
+  // The steps first: the query below filters on them, and four step names
+  // typed in here matched nothing on a shop that calls its steps something
+  // else — a service board that stayed empty through a full day.
+  const statuses = await getOrderStatuses();
+
   const [ordersRes, leadsRes, makeable, shift] = await Promise.all([
     supabase
       .from("orders_for_staff")
       .select("id, created_at, status, contact_name, scheduled_for")
-      .in("status", ["pending", "confirmed", "preparing", "ready"])
+      .in("status", openKeys(statuses))
       .order("created_at", { ascending: false }),
     supabase
       .from("chat_threads")

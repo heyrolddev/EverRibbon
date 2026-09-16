@@ -1,3 +1,6 @@
+import { isFulfilled } from "@/lib/order-statuses";
+import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { lineName } from "@/lib/order-lines";
 import { brand } from "../../../config/index.ts";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -87,10 +90,12 @@ export default async function OrdersPage() {
     );
   }
 
+  const statuses = await getOrderStatuses();
+
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
     .select(
-      "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, eta_set_at, scheduled_for, delivery_address, delivery_fee, payment_method, payment_status, payment_reference, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(id, product_id, qty, price_at_sale, products(name))"
+      "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, eta_set_at, scheduled_for, delivery_address, delivery_fee, payment_method, payment_status, payment_reference, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(id, product_id, qty, price_at_sale, label, products(name))"
     )
     .eq("customer_id", user.id)
     .order("created_at", { ascending: false });
@@ -128,13 +133,17 @@ export default async function OrdersPage() {
   );
 
   const reviewableFor = (o: Order): ReviewableItem[] => {
-    if (o.status !== "completed") return [];
+    // Only a purchase that actually reached the customer can be reviewed.
+    // Keyed to the name "completed" this returned nothing on any shop whose
+    // last step is called something else, so the review panel simply never
+    // appeared and the shop concluded its customers do not review things.
+    if (!isFulfilled(statuses, o.status)) return [];
     // One row per distinct product — ordering the same thing twice shouldn't ask
     // for two reviews of it.
     const seen = new Map<string, string>();
     for (const l of o.order_lines ?? []) {
       const id = (l as unknown as { product_id?: string }).product_id;
-      if (id && !seen.has(id)) seen.set(id, l.products?.name ?? "Item");
+      if (id && !seen.has(id)) seen.set(id, lineName(l));
     }
     return [
       {
@@ -177,7 +186,7 @@ export default async function OrdersPage() {
       id: l.id,
       qty: Number(l.qty),
       price_at_sale: Number(l.price_at_sale),
-      name: l.products?.name ?? "Item",
+      name: lineName(l),
     })),
   }));
 
@@ -222,7 +231,7 @@ export default async function OrdersPage() {
                 vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null}
               />
             )}
-            <OrderTracker orders={tracked} customerId={user.id} />
+            <OrderTracker orders={tracked} customerId={user.id} statuses={statuses} />
 
             {/* Somewhere to go from here. Without it the only way back to the
                 menu from a page full of finished orders is the header. */}
