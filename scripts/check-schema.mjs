@@ -80,16 +80,72 @@ const checks = [
    "and tablename in ('orders','chat_messages','chat_threads','staff_shifts')", "4",
    "Without these the order board, the tracker, the inbox and the shift list stop updating, silently."],
 
+  ["a custom line can exist without a product",
+   "select count(*) from pg_constraint where conname='order_lines_identified' and contype='c'", "1",
+   "A made-to-order shop's first line has no product row; without this it cannot be saved at all."],
+
   ["no column is food-shaped either",
    "select count(*) from information_schema.columns where table_schema='public' " +
    "and (column_name like '%meal%' or column_name like '%ingredient%' or column_name like '%dish%')", "0",
    "Columns outlive tables in queries; a stray meal_id would spread."],
 ];
 
+/**
+ * Things a query has to actually DO.
+ *
+ * Structure is cheap to assert and easy to get wrong in ways structure cannot
+ * see: `minutes_booked` joined products INNER for five migrations, which is
+ * valid SQL, a valid schema, and silently reported a day full of custom work
+ * as empty. So these run the function against rows and check the number.
+ */
+const behaviours = [
+  ["the calendar counts a custom line", () => {
+    psql(["-c", `
+      insert into order_statuses (key, label, sort_order, is_open)
+        values ('quoted_test', 'Quoted (test)', 900, true)
+        on conflict (key) do nothing;
+      insert into orders (id, date, status, scheduled_for)
+        values ('ord_test', current_date, 'quoted_test', current_date);
+      insert into order_lines (order_id, product_id, qty, price_at_sale, label, labour_minutes)
+        values ('ord_test', null, 3, 400, '3-stem bouquet, ivory + gold', 16.2);
+    `]);
+    return scalar("select minutes_booked(current_date)");
+  }, "48.6",
+   "A line with no product must still book time, or the day fills while reading empty."],
+
+  ["the calendar still counts a catalogue line", () => {
+    psql(["-c", `
+      insert into products (id, name, price, assembly_minutes)
+        values ('prod_test', 'Test product', 100, 5);
+      insert into order_lines (order_id, product_id, qty, price_at_sale)
+        values ('ord_test', 'prod_test', 2, 100);
+    `]);
+    return scalar("select minutes_booked(current_date)");
+  }, "58.6",
+   "The product path must be unchanged: 48.6 from the custom line plus 2 x 5."],
+
+  ["a line that is neither a product nor a description is refused", () => {
+    try {
+      psql(["-c", "insert into order_lines (order_id, product_id, qty, price_at_sale) " +
+                  "values ('ord_test', null, 1, 10)"]);
+      return "accepted";
+    } catch { return "refused"; }
+  }, "refused",
+   "Otherwise a blank line prints as an empty row on the receipt and cannot be costed."],
+];
+
 let failed = 0;
 console.log("");
 for (const [what, sql, want, why] of checks) {
   const got = scalar(sql);
+  const ok = got === want;
+  if (!ok) failed++;
+  console.log(`  ${ok ? "ok  " : "FAIL"} ${what}${ok ? "" : `  (got ${got}, want ${want})\n       ${why}`}`);
+}
+
+for (const [what, run, want, why] of behaviours) {
+  let got;
+  try { got = String(run()); } catch (e) { got = `threw: ${String(e.message).split("\n")[0]}`; }
   const ok = got === want;
   if (!ok) failed++;
   console.log(`  ${ok ? "ok  " : "FAIL"} ${what}${ok ? "" : `  (got ${got}, want ${want})\n       ${why}`}`);

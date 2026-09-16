@@ -1,7 +1,7 @@
 import { NotAllowed } from "@/components/not-allowed";
 import { can, getViewer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getOperating, capacityRange } from "@/lib/operating";
+import { getOperating, capacityRange } from "@/lib/operating-server";
 import { CapacityView } from "@/components/capacity-view";
 import { hqTitle } from "@/lib/hq-theme";
 import { addDays, shopToday } from "@/lib/format";

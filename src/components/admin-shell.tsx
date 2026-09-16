@@ -61,6 +61,9 @@ const GROUPS: Group[] = [
       { href: "/admin/ask", label: "Ask HQ", icon: "✽", needs: "assistant" },
       { href: "/admin/counter", label: "Counter", icon: "◫", needs: "till" },
       { href: "/admin/orders", label: "Orders", icon: "▤", badge: "orders", needs: "orders" },
+      // Immediately after Orders, because for a made-to-order shop it is the
+      // step before one: there is no order to track until there is a price.
+      { href: "/admin/quotes", label: "Quote", icon: "≈", needs: "orders" },
       // Staff lose this one: it is where prices, photos and descriptions are
       // set. A manager keeps it to mark a product sold out mid-service, and the
       // screen itself is what hides the price fields from them.
