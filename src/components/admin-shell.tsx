@@ -109,6 +109,10 @@ const GROUPS: Group[] = [
       // change before anything else, and until it is set every page shows the
       // shop's name in a fallback face.
       { href: "/admin/brand", label: "Logo", icon: "◈", needs: "settings" },
+      // Next to Menu's settings rather than in "Every day": what the shop
+      // asks about a job changes about as often as its opening hours, and the
+      // answers are given on the quote desk, not here.
+      { href: "/admin/spec", label: "What to ask", icon: "◰", needs: "settings" },
       { href: "/admin/hours", label: "Hours", icon: "◷", needs: "settings" },
       { href: "/admin/capacity", label: "Capacity", icon: "◑", needs: "settings" },
       { href: "/admin/delivery", label: "Delivery", icon: "→", needs: "settings" },

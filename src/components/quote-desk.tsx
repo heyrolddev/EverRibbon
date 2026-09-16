@@ -12,6 +12,13 @@ import {
   type Uplift,
 } from "@/lib/quote";
 import { verdictFor, type CapacityDay, type Operating } from "@/lib/operating";
+import {
+  missingRequired,
+  questionsFor,
+  scopedCategories,
+  type SpecQuestion,
+} from "@/lib/spec";
+import { SpecFields } from "@/components/spec-fields";
 import { saveQuote } from "@/app/admin/quotes/actions";
 
 /**
@@ -40,12 +47,23 @@ export type Preset = {
   price: number;
   /** Its volume ladder, if it has one. */
   breaks: PriceBreak[];
+  /** Its catalogue categories, which decide which questions get asked. */
+  categories: string[];
 };
 
 type Row = QuoteLine & {
   key: number;
   /** The catalogue row a preset came from, so the server can price it itself. */
   productId: string | null;
+  /**
+   * What kind of work this is, which decides which of the shop's questions
+   * are asked about it. Comes from the product for a catalogue line, and from
+   * a picker for a bespoke one — a custom graduation bouquet needs the
+   * graduation questions just as much as a listed one does.
+   */
+  categories: string[];
+  /** The answers so far, keyed by question. */
+  spec: Record<string, string>;
 };
 
 const field =
@@ -64,6 +82,8 @@ const blank = (): Row => ({
   listPrice: null,
   breaks: [],
   productId: null,
+  categories: [],
+  spec: {},
 });
 
 /** Empty reads as 0 without the field fighting you as you clear it. */
@@ -73,11 +93,13 @@ export function QuoteDesk({
   operating,
   days,
   presets,
+  questions,
   today,
 }: {
   operating: Operating;
   days: CapacityDay[];
   presets: Preset[];
+  questions: SpecQuestion[];
   today: string;
 }) {
   const [rows, setRows] = useState<Row[]>([blank()]);
@@ -135,6 +157,31 @@ export function QuoteDesk({
   const set = (key: number, patch: Partial<Row>) =>
     setRows((r) => r.map((row) => (row.key === key ? { ...row, ...patch } : row)));
 
+  // The categories the shop has actually scoped a question to. Anything else
+  // in the catalogue is not worth offering as a choice here, because picking
+  // it would change nothing on the screen.
+  const askedAbout = scopedCategories(questions);
+
+  /** The questions this line is asked, given what kind of work it is. */
+  const asksFor = (row: Row) => questionsFor(questions, row.categories);
+
+  const answer = (key: number, field: string, value: string) =>
+    setRows((r) =>
+      r.map((row) =>
+        row.key === key ? { ...row, spec: { ...row.spec, [field]: value } } : row
+      )
+    );
+
+  // Which required questions are unanswered, per line. Computed for the
+  // whole form rather than per keystroke so the save button and the red
+  // outlines can never disagree about what is missing.
+  const shortfall = new Map<number, string[]>();
+  for (const row of rows) {
+    if (!row.label.trim() || row.qty <= 0) continue;
+    const gaps = missingRequired(asksFor(row), row.spec);
+    if (gaps.length > 0) shortfall.set(row.key, gaps.map((g) => g.key));
+  }
+
   const applyPreset = (key: number, id: string) => {
     const p = presets.find((x) => x.id === id);
     if (!p) return;
@@ -147,6 +194,7 @@ export function QuoteDesk({
       productId: p.id,
       listPrice: p.price > 0 ? p.price : null,
       breaks: p.breaks,
+      categories: p.categories,
       priceEach: null,
       // A product nobody has costed prefills nothing rather than zero: zero is
       // a claim that it is free to make, and it would read as pure margin.
@@ -177,6 +225,12 @@ export function QuoteDesk({
           priceEach: r.priceEach,
           // The id, not the price. The server looks the price up.
           productId: r.productId,
+          // The typed answers, not the finished spec. The server rebuilds it
+          // from its own copy of the questions, for the same reason it
+          // reprices: a browser may say what was answered, never what was
+          // asked.
+          categories: r.categories,
+          spec: r.spec,
         })),
     });
     setSaving(false);
@@ -184,7 +238,7 @@ export function QuoteDesk({
     else setError(res.error);
   };
 
-  const usable = rows.some((r) => r.label.trim() && r.qty > 0);
+  const usable = rows.some((r) => r.label.trim() && r.qty > 0) && shortfall.size === 0;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -316,6 +370,58 @@ export function QuoteDesk({
                         </span>
                       )}
                     </p>
+                  )}
+
+                  {/*
+                    The answers that make this the thing they asked for.
+                    Below the price on purpose: the call goes "magkano?" first
+                    and "ano'ng ilalagay?" second, and a form that asks in the
+                    other order is a form somebody abandons halfway.
+
+                    Absent entirely on a shop that asks nothing — this is the
+                    shop's own list of questions, not a fixture of the
+                    software.
+                  */}
+                  {(asksFor(row).length > 0 || (askedAbout.length > 0 && !row.productId)) && (
+                    <div className="mt-4 border-t border-ink-950/10 pt-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-ink-900/50">
+                          What exactly
+                        </span>
+                        {/*
+                          A bespoke line has no product to take its kind from,
+                          so it is asked — otherwise a custom graduation
+                          bouquet gets the general questions and none of the
+                          graduation ones, which is precisely the order that
+                          needs them.
+                        */}
+                        {askedAbout.length > 0 && !row.productId && (
+                          <select
+                            value={row.categories[0] ?? ""}
+                            onChange={(e) =>
+                              set(row.key, {
+                                categories: e.target.value ? [e.target.value] : [],
+                              })
+                            }
+                            className="rounded-full border border-ink-950/15 bg-paper-50 px-3 py-1.5 text-xs text-ink-900/70 outline-none focus:border-brand-600"
+                          >
+                            <option value="">What kind of work?</option>
+                            {askedAbout.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+
+                      <SpecFields
+                        questions={asksFor(row)}
+                        values={row.spec}
+                        missing={shortfall.get(row.key) ?? []}
+                        onChange={(field, value) => answer(row.key, field, value)}
+                      />
+                    </div>
                   )}
                 </div>
               );

@@ -11,6 +11,8 @@ import { cancelMyOrder, submitPayment, updateMyOrder } from "@/app/orders/action
 import { LiveDotIcon } from "@/components/icons";
 import { OrderReviewPanel, type ReviewableItem } from "@/components/order-review-panel";
 import { ProofCard } from "@/components/proof-card";
+import { SpecList } from "@/components/spec-list";
+import type { SpecAnswer } from "@/lib/spec";
 import type { Proof } from "@/lib/proofs";
 import {
   awaitingCustomer,
@@ -38,6 +40,15 @@ export type TrackedLine = {
   qty: number;
   price_at_sale: number;
   name: string;
+  /**
+   * What was agreed for this line, in the shop's own wording.
+   *
+   * Shown to the customer and not only to the shop, on purpose. They are
+   * about to approve a photograph of it, and "did I say maroon or burgundy"
+   * is a question they should be able to answer without scrolling back
+   * through a chat thread.
+   */
+  spec: SpecAnswer[];
 };
 
 export type TrackedOrder = {
@@ -301,7 +312,8 @@ function OrderCard({
         {order.lines.map((l) => {
           const qty = qtys[l.id] ?? l.qty;
           return (
-            <li key={l.id} className="flex items-center justify-between gap-4">
+            <li key={l.id}>
+              <div className="flex items-center justify-between gap-4">
               <span className={`text-ink-900 ${editing && qty === 0 ? "line-through opacity-50" : ""}`}>
                 {l.name}
               </span>
@@ -331,6 +343,8 @@ function OrderCard({
                   {l.qty} × {money(l.price_at_sale)}
                 </span>
               )}
+              </div>
+              <SpecList answers={l.spec} className="mt-1.5 pl-1" />
             </li>
           );
         })}

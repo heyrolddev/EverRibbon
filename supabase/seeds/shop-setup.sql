@@ -48,9 +48,17 @@ UPDATE public.shop_settings SET
   wordmark_dark_url =
     'https://blvfphsvbvtghtjcgxda.supabase.co/storage/v1/object/public/everribbon/EverRibbon_Final-no_bg.png',
 
-  -- ↓ the DARK mark, for light backgrounds. Leave NULL until there is one —
-  --   the shop's name is set in Bodoni in the meantime, which is legible.
-  wordmark_url = NULL
+  -- ↓ the DARK mark, for light backgrounds — the header and anything printed.
+  --   Leave it NULL until there is one: the shop's name is set in Bodoni in
+  --   the meantime, which is legible, and a gold mark on cream is not.
+  wordmark_url =
+    'https://blvfphsvbvtghtjcgxda.supabase.co/storage/v1/object/public/everribbon/3-removebg-preview.png',
+
+  -- Cleared so the server re-reads both files' headers on the next render.
+  -- A size belongs to the file it was measured from; keeping the old numbers
+  -- against a new URL is how a mark ends up drawn at another mark's ratio.
+  wordmark_width = NULL, wordmark_height = NULL,
+  wordmark_dark_width = NULL, wordmark_dark_height = NULL
 WHERE id = 1;
 
 

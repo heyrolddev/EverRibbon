@@ -1,5 +1,6 @@
 import { AdminOrderList } from "@/components/admin-order-list";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { getSpecQuestions } from "@/lib/spec-server";
 import { LiveOrdersBanner } from "@/components/live-orders-banner";
 import { BOARD_LIMIT, loadBoardOrders } from "@/lib/orders-admin-server";
 import { hqTitle } from "@/lib/hq-theme";
@@ -10,7 +11,12 @@ export const dynamic = "force-dynamic";
 export default async function AdminOrdersPage() {
   // The shop's own steps, fetched once and handed to the client components,
   // which cannot ask for themselves.
-  const statuses = await getOrderStatuses();
+  const [statuses, questions] = await Promise.all([
+    getOrderStatuses(),
+    // What the shop asks about a job, so an answer can be corrected on the
+    // card when the customer changes their mind.
+    getSpecQuestions(),
+  ]);
   const { orders, total, error } = await loadBoardOrders();
 
   // A failed query used to render as "no orders yet", which is the worst
@@ -36,7 +42,13 @@ export default async function AdminOrdersPage() {
   return (
     <div className="flex flex-col gap-6">
       <LiveOrdersBanner />
-      <AdminOrderList orders={orders} loaded={BOARD_LIMIT} total={total} statuses={statuses} />
+      <AdminOrderList
+        orders={orders}
+        loaded={BOARD_LIMIT}
+        total={total}
+        statuses={statuses}
+        questions={questions}
+      />
     </div>
   );
 }

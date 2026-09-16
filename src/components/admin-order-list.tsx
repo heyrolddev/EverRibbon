@@ -6,6 +6,9 @@ import { ticketOf } from "@/lib/tickets";
 import { alertEtaElapsed } from "@/app/admin/orders/actions";
 import { OrderStatusPicker } from "@/components/order-status-picker";
 import { ProofSender } from "@/components/proof-sender";
+import { SpecTweak } from "@/components/spec-tweak";
+import { SpecQuestionsProvider, useSpecQuestions } from "@/components/spec-questions-provider";
+import type { SpecAnswer, SpecQuestion } from "@/lib/spec";
 import type { Proof } from "@/lib/proofs";
 import { EtaPicker } from "@/components/eta-picker";
 import { AdminSearch } from "@/components/admin-search";
@@ -61,7 +64,16 @@ export type AdminOrder = {
   payment_plan: PaymentPlan;
   downpayment_amount: number;
   downpayment_confirmed_at: string | null;
-  lines: { qty: number; price: number; name: string }[];
+  lines: {
+    id: number;
+    qty: number;
+    price: number;
+    name: string;
+    /** The catalogue categories behind it, which decide what is asked. */
+    categories: string[];
+    /** What was agreed, in the shop's own wording as it stood then. */
+    spec: SpecAnswer[];
+  }[];
   /** Photographs sent for approval, oldest first. */
   proofs: Proof[];
   customer: {
@@ -75,6 +87,7 @@ export type AdminOrder = {
 
 
 function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderStatusRow[] }) {
+  const questions = useSpecQuestions();
   const p = o.customer;
   const payment = moneyState(o);
   return (
@@ -211,21 +224,37 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
         </div>
       </div>
 
-      {/* Only for a shop that has a step meaning "with the customer, nothing
-          made yet". A kitchen has no such step and gets no panel, rather than
-          a panel that does nothing. */}
-      {proofStep(statuses) && <ProofSender orderId={o.id} proofs={o.proofs} />}
-
-      <ul className="mt-4 flex flex-col gap-1 border-t border-ink-950/10 pt-3 text-sm">
+      <ul className="mt-4 flex flex-col gap-2.5 border-t border-ink-950/10 pt-3 text-sm">
         {o.lines.map((l, i) => (
-          <li key={i} className="flex justify-between gap-4">
-            <span className="text-ink-900">
-              {l.qty} × {l.name}
-            </span>
-            <span className="font-semibold text-ink-950">{money(l.qty * l.price)}</span>
+          <li key={i}>
+            <div className="flex justify-between gap-4">
+              <span className="text-ink-900">
+                {l.qty} × {l.name}
+              </span>
+              <span className="font-semibold text-ink-950">{money(l.qty * l.price)}</span>
+            </div>
+            {/* What was actually agreed, under the line it belongs to rather
+                than in a panel of its own. This is what the person at the
+                bench works from, and a detail one tap away is a detail that
+                gets guessed at. */}
+            <SpecTweak
+              lineId={l.id}
+              categories={l.categories}
+              answers={l.spec}
+              questions={questions}
+            />
           </li>
         ))}
       </ul>
+
+      {/* After the items, not before them: the photograph being sent is a
+          photograph OF those items, and whoever is about to take it needs the
+          spec on screen first.
+
+          Only for a shop that has a step meaning "with the customer, nothing
+          made yet". A kitchen has no such step and gets no panel, rather than
+          a panel that does nothing. */}
+      {proofStep(statuses) && <ProofSender orderId={o.id} proofs={o.proofs} />}
 
       <PaymentVerifier
         orderId={o.id}
@@ -353,6 +382,7 @@ export function AdminOrderList({
   loaded,
   total,
   statuses,
+  questions,
 }: {
   orders: AdminOrder[];
   /** How many the board asked for. */
@@ -361,6 +391,8 @@ export function AdminOrderList({
   total: number;
   /** The shop's own steps, from the database. */
   statuses: OrderStatusRow[];
+  /** What the shop asks about a job. Empty for a shop that asks nothing. */
+  questions: SpecQuestion[];
 }) {
   /**
    * The archive, for when the board's slice does not contain the answer.
@@ -410,6 +442,10 @@ export function AdminOrderList({
   );
 
   return (
+    // Wrapped once, here, rather than passed down through the board, the
+    // archive and two kinds of row — the row that gets missed in that kind of
+    // threading is the row where somebody cannot correct an answer.
+    <SpecQuestionsProvider questions={questions}>
     <AdminSearch
       rows={orders}
       searchText={searchText}
@@ -484,6 +520,7 @@ export function AdminOrderList({
         );
       }}
     </AdminSearch>
+    </SpecQuestionsProvider>
   );
 }
 

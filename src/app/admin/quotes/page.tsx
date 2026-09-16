@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOperating, capacityRange } from "@/lib/operating-server";
 import { loadCostBook } from "@/lib/costing-server";
 import { QuoteDesk, type Preset } from "@/components/quote-desk";
+import { getSpecQuestions } from "@/lib/spec-server";
 import { hqTitle } from "@/lib/hq-theme";
 import { addDays, shopToday } from "@/lib/format";
 import { brand } from "../../../../config/index.ts";
@@ -40,12 +41,15 @@ export default async function AdminQuotesPage() {
   // rather than as free.
   const costed = can(viewer, "costs");
 
-  const [operating, days, products, ladders, book] = await Promise.all([
+  const [operating, questions, days, products, ladders, book] = await Promise.all([
     getOperating(),
+    // What this shop asks about a job. Empty on a shop that asks nothing,
+    // and the desk renders nothing for it rather than an empty heading.
+    getSpecQuestions(),
     capacityRange(today, addDays(today, DAYS_AHEAD)),
     supabase
       .from("products")
-      .select("id, name, price, assembly_minutes")
+      .select("id, name, price, assembly_minutes, categories")
       .eq("is_available", true)
       .order("name"),
     // The shop's own volume ladders, so a quote for ten rolls is the price
@@ -78,6 +82,9 @@ export default async function AdminQuotesPage() {
       materials: cost?.costed ? cost.cost : null,
       price: Number(p.price) || 0,
       breaks: breaksByProduct.get(id) ?? [],
+      // Which of the shop's questions get asked about this, decided by the
+      // product's own categories rather than by anything typed on the desk.
+      categories: Array.isArray(p.categories) ? p.categories.map(String) : [],
     };
   });
 
@@ -97,6 +104,7 @@ export default async function AdminQuotesPage() {
         operating={operating}
         days={days}
         presets={presets}
+        questions={questions}
         today={today}
       />
     </div>

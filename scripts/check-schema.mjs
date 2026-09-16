@@ -180,6 +180,40 @@ const behaviours = [
     } catch { return "refused"; }
   }, "refused",
    "Otherwise a blank line prints as an empty row on the receipt and cannot be costed."],
+
+  ["a question's key is a key a JSON reader can hold", () => {
+    try {
+      psql(["-c", "insert into spec_questions (key, label) values ('Name on ribbon', 'x')"]);
+      return "accepted";
+    } catch { return "refused"; }
+  }, "refused",
+   "The key is a JSON key on every answer filed under it; a space in it is a key somebody gets wrong."],
+
+  ["a pick-one question with nothing to pick is refused", () => {
+    try {
+      psql(["-c", "insert into spec_questions (key, label, kind) values ('colour', 'Colour', 'choice')"]);
+      return "accepted";
+    } catch { return "refused"; }
+  }, "refused",
+   "A dropdown with no options is a dead end the person filling the form cannot get past."],
+
+  ["renaming a category keeps the questions asked about it", () => {
+    // The category's NAME is its key, so a rename is an UPDATE to the thing
+    // every question points at. Without ON UPDATE CASCADE the questions
+    // would quietly stop being asked and nothing would report it.
+    psql(["-c",
+      "insert into catalog_categories (name) values ('Sashes'); " +
+      "insert into spec_questions (key, label, category) values ('sash_text', 'Text', 'Sashes'); " +
+      "update catalog_categories set name = 'Sash Printing' where name = 'Sashes'"]);
+    return scalar("select coalesce(category, 'DETACHED') from spec_questions where key = 'sash_text'");
+  }, "Sash Printing",
+   "A question that silently stops being asked is worse than one that was never written."],
+
+  ["deleting a category widens its questions rather than deleting them", () => {
+    psql(["-c", "delete from catalog_categories where name = 'Sash Printing'"]);
+    return scalar("select coalesce(category, 'every job') from spec_questions where key = 'sash_text'");
+  }, "every job",
+   "Tidying the catalogue must not take the shop's own questions with it."],
 ];
 
 let failed = 0;

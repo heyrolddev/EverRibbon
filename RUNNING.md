@@ -26,6 +26,18 @@ and it ends by telling you what is still missing.
 Every block is safe on its own and safe to run twice. Fill in what you have
 and come back for the rest.
 
+There are two more seed files in the same folder, run the same way:
+
+| File | What it loads |
+|---|---|
+| `everribbon-catalogue.sql` | the categories, the 34 products and the price ladders |
+| `everribbon-questions.sql` | a starting set of questions for the quote desk |
+
+The questions are a starting point, not an answer — reword, delete and add
+them on **HQ → What to ask**. Rewording is safe at any time: every answer
+already given carries the wording it was given under, so an order taken today
+still reads correctly after the question changes next month.
+
 Once the site is running these are all on screens instead — HQ → Logo,
 HQ → Delivery, HQ → Hours — and the screens are easier. This file exists
 because the settings are needed *before* there is a screen to use.
@@ -89,6 +101,9 @@ is used instead, so sharing works before anything has been bought.
 - [ ] The delivery pin dropped (HQ → Delivery) — until it is, delivery is
       offered to nobody, on purpose
 - [ ] Opening hours set (HQ → Hours)
+- [ ] The quote desk's questions checked (HQ → What to ask) — these are what
+      the shop asks about a custom job, and the answers travel with the order
+      onto the board, the proof photo and the customer's own page
 - [ ] Payment details set (HQ → Payments) — GCash name and number
 - [ ] One test order placed end to end, and moved through every step
 - [ ] Product photographs uploaded (HQ → Shop). Prices are already loaded

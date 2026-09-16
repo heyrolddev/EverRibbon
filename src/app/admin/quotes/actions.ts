@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { can, getViewer } from "@/lib/auth";
 import { getOperating } from "@/lib/operating-server";
+import { getSpecQuestions } from "@/lib/spec-server";
+import { answersFrom, missingRequired, questionsFor, specJson } from "@/lib/spec";
 import { quote, QUOTE_VALID_DAYS, type Uplift } from "@/lib/quote";
 import type { PriceBreak } from "@/lib/price-breaks";
 import { addDays, shopToday } from "@/lib/format";
@@ -48,6 +50,19 @@ export type QuoteDraft = {
      * can type, and this one decides what a customer is charged.
      */
     productId?: string | null;
+    /**
+     * What kind of work this is, which decides which questions apply.
+     * From the product for a catalogue line, from the desk for a bespoke one.
+     */
+    categories?: string[];
+    /**
+     * The answers as typed, keyed by question.
+     *
+     * The answers, not the finished spec. The wording stored beside each one
+     * is read from the questions table on this side — a browser may say what
+     * a customer answered, never what the shop asked.
+     */
+    spec?: Record<string, string>;
   }[];
 };
 
@@ -64,7 +79,27 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
   if (lines.length === 0) return { ok: false, error: "Add at least one item." };
 
   const supabase = await createClient();
-  const operating = await getOperating();
+  const [operating, questions] = await Promise.all([getOperating(), getSpecQuestions()]);
+
+  /*
+   * A required question with no answer stops the quote here.
+   *
+   * The desk already greys the save button out, which is the kind thing to
+   * do and not a guarantee of anything — this is. The shop marked it
+   * required because the job cannot be started without it, and an order that
+   * cannot be started is worse on the board than an enquiry that was never
+   * written down.
+   */
+  const asked = lines.map((l) => questionsFor(questions, l.categories ?? []));
+  for (const [i, qs] of asked.entries()) {
+    const gaps = missingRequired(qs, lines[i]?.spec ?? {});
+    if (gaps.length > 0) {
+      return {
+        ok: false,
+        error: `"${lines[i]?.label.trim()}" still needs: ${gaps.map((g) => g.label).join(", ")}.`,
+      };
+    }
+  }
 
   /*
    * The published price for anything on this quote that the shop sells.
@@ -176,6 +211,10 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
       label: l.label,
       labour_minutes: l.minutesEach,
       unit_cost: l.qty > 0 ? l.cost / l.qty : 0,
+      // The answers that make this the thing they asked for, with the shop's
+      // own wording copied in beside each one. NULL when nothing was asked,
+      // so "no questions" and "questions left blank" stay distinguishable.
+      spec: specJson(answersFrom(asked[i] ?? [], lines[i]?.spec ?? {})),
     }))
   );
 

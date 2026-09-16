@@ -1,6 +1,7 @@
 import type { Proof } from "@/lib/proofs";
 import { isFulfilled } from "@/lib/order-statuses";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { parseSpec } from "@/lib/spec";
 import { lineName } from "@/lib/order-lines";
 import { brand } from "../../../config/index.ts";
 import Link from "next/link";
@@ -96,7 +97,7 @@ export default async function OrdersPage() {
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
     .select(
-      "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, eta_set_at, scheduled_for, delivery_address, delivery_fee, payment_method, payment_status, payment_reference, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(id, product_id, qty, price_at_sale, label, products(name))"
+      "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, eta_set_at, scheduled_for, delivery_address, delivery_fee, payment_method, payment_status, payment_reference, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(id, product_id, qty, price_at_sale, label, spec, products(name))"
     )
     .eq("customer_id", user.id)
     .order("created_at", { ascending: false });
@@ -218,6 +219,10 @@ export default async function OrdersPage() {
       qty: Number(l.qty),
       price_at_sale: Number(l.price_at_sale),
       name: lineName(l),
+      // Parsed here so a spec written by hand into the column renders the
+      // same on the customer's page as on the board — or renders nothing,
+      // rather than taking their order history down.
+      spec: parseSpec((l as unknown as { spec?: unknown }).spec),
     })),
     proofs: proofsByOrder.get(String(o.id)) ?? [],
   }));

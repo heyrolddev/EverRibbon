@@ -1,6 +1,7 @@
 import type { Proof } from "@/lib/proofs";
 import { isFulfilled } from "@/lib/order-statuses";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
+import { parseSpec } from "@/lib/spec";
 import { lineName } from "@/lib/order-lines";
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
@@ -33,7 +34,7 @@ import {
 export const BOARD_LIMIT = 200;
 
 const COLUMNS =
-  "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, cancelled_by, cancelled_at, eta_set_at, contact_name, contact_phone, notes, customer_id, delivery_address, delivery_lat, delivery_lng, delivery_distance_km, delivery_fee, payment_method, payment_status, payment_reference, payment_receipt_url, scheduled_for, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(qty, price_at_sale, label, products(name)), order_proofs(id, version, image_url, note, sent_at, decision, reply, decided_at)";
+  "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, cancelled_by, cancelled_at, eta_set_at, contact_name, contact_phone, notes, customer_id, delivery_address, delivery_lat, delivery_lng, delivery_distance_km, delivery_fee, payment_method, payment_status, payment_reference, payment_receipt_url, scheduled_for, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(id, qty, price_at_sale, label, spec, products(name, categories)), order_proofs(id, version, image_url, note, sent_at, decision, reply, decided_at)";
 
 type OrderRow = {
   id: string;
@@ -65,10 +66,12 @@ type OrderRow = {
   downpayment_amount: number | null;
   downpayment_confirmed_at: string | null;
   order_lines: {
+    id: number;
+    spec: unknown;
     qty: number;
     price_at_sale: number;
     label: string | null;
-    products: { name: string } | null;
+    products: { name: string; categories: string[] | null } | null;
   }[];
   order_proofs: Record<string, unknown>[] | null;
 };
@@ -154,9 +157,17 @@ async function hydrate(rows: OrderRow[]): Promise<AdminOrder[]> {
       downpayment_amount: Number(o.downpayment_amount ?? 0),
       downpayment_confirmed_at: o.downpayment_confirmed_at,
       lines: (o.order_lines ?? []).map((l) => ({
+        id: Number(l.id),
         qty: Number(l.qty),
         price: Number(l.price_at_sale),
         name: lineName(l),
+        // What kind of work it is, so the card knows which questions to
+        // offer if somebody needs to change an answer.
+        categories: l.products?.categories ?? [],
+        // What was agreed, with the shop's own wording as it stood when it
+        // was agreed. Parsed here so a malformed spec is an empty list on the
+        // board rather than a card that fails to render.
+        spec: parseSpec(l.spec),
       })),
       proofs: (o.order_proofs ?? []).map((p) => ({
         id: Number(p.id),
