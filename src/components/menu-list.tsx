@@ -1,4 +1,5 @@
 "use client";
+import { ladderRows, type PriceBreak } from "@/lib/price-breaks";
 import { money } from "@/lib/format";
 
 import { useMemo, useState } from "react";
@@ -26,6 +27,10 @@ export type Product = {
   image_url: string | null;
   avg_rating?: number | null;
   review_count?: number;
+  /** What one unit is — "roll", "piece". Shown beside the price where it is not obvious. */
+  unit?: string | null;
+  /** Buy more, pay less. Empty for anything sold at one price. */
+  priceBreaks?: PriceBreak[];
 };
 
 function initialOf(name: string) {
@@ -146,12 +151,44 @@ function MealCard({
             {product.description}
           </p>
         )}
+        {/* Buy more, pay less — said on the card rather than discovered at
+            checkout. Two extra rolls for fifty pesos off every roll is the
+            kind of thing that sells the two extra rolls, and it cannot do
+            that from a page nobody has reached yet. */}
+        {(product.priceBreaks?.length ?? 0) > 0 && (
+          <ul className="mt-2 flex flex-col gap-0.5 border-t border-ink-950/10 pt-2 text-[11px] text-ink-900/60">
+            {ladderRows(Number(product.price), product.priceBreaks ?? []).map((row) => (
+              <li key={row.from} className="flex justify-between gap-2 tabular-nums">
+                <span>
+                  {row.to === null ? `${row.from}+` : `${row.from}\u2013${row.to}`}
+                  {product.unit ? ` ${product.unit}${row.to === 1 ? "" : "s"}` : ""}
+                </span>
+                <span className="font-semibold text-ink-950">{money(row.unitPrice)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {/* Wraps rather than squeezing. Two columns on a phone leaves about
             120px of card, and a peso price beside a button doesn't fit that —
             they were overlapping, with the button sitting on the price. */}
         <div className="mt-auto flex flex-wrap items-center justify-between gap-1.5 pt-2 sm:gap-2 sm:pt-3">
           <span className="font-display text-base font-black text-brand-700 sm:text-lg">
-            {money(Number(product.price))}
+            {Number(product.price) > 0 ? (
+              <>
+                {money(Number(product.price))}
+                {product.unit && product.unit !== "piece" && (
+                  <span className="text-xs font-bold text-ink-900/50">
+                    {" "}
+                    / {product.unit}
+                  </span>
+                )}
+              </>
+            ) : (
+              // Priced per job. Saying "₱0.00" reads as free, which is the
+              // one thing it is not.
+              <span className="text-sm">Ask for a quote</span>
+            )}
           </span>
           {/* Nothing to add to: staff can't check out, so the button would
               only fill a cart that leads to a refusal. */}

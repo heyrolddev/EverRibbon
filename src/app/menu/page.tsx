@@ -21,12 +21,30 @@ async function getMenu(): Promise<{
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("products")
-      .select("id, name, price, description, categories, image_url")
+      .select("id, name, price, description, categories, image_url, unit")
       .eq("is_public", true)
       .eq("is_available", true)
       .order("name");
 
     if (error) throw error;
+
+    // The volume ladders. A failure here costs the "buy five, save fifty"
+    // lines and nothing else — the price on the card is the product's own.
+    const { data: breakRows } = await supabase
+      .from("product_price_breaks")
+      .select("product_id, min_qty, unit_price")
+      .order("min_qty");
+
+    const breaksByProduct = new Map<string, { minQty: number; unitPrice: number }[]>();
+    for (const r of (breakRows ?? []) as {
+      product_id: string;
+      min_qty: number;
+      unit_price: number;
+    }[]) {
+      const list = breaksByProduct.get(r.product_id) ?? [];
+      list.push({ minQty: Number(r.min_qty), unitPrice: Number(r.unit_price) });
+      breaksByProduct.set(r.product_id, list);
+    }
 
     // Ratings come from their own view; a menu with no reviews yet simply
     // renders without stars rather than failing.
@@ -61,6 +79,7 @@ async function getMenu(): Promise<{
       avg_rating: byMeal.get(m.id) ? Number(byMeal.get(m.id)!.avg_rating) : null,
       review_count: byMeal.get(m.id)?.review_count ?? 0,
       makeable: makeable.get(m.id) ?? null,
+      priceBreaks: breaksByProduct.get(m.id) ?? [],
     }));
 
     return { menu, categories: (catRows ?? []) as MenuCategory[], configured: true };
