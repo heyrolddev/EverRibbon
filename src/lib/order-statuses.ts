@@ -77,17 +77,19 @@ export type OrderStatusRow = {
  * What a shop gets before anyone has touched the statuses screen.
  *
  * Present so a database that has not run migration 0007 renders a working
- * board instead of an empty one. It is a floor, not a default: the moment the
- * table has rows, they win.
+ * board instead of an empty one — and a shop with no credentials at all
+ * renders a homepage, which is the very first thing anyone sees of this
+ * system. It is a floor, not a default: the moment the table has rows, they
+ * win.
  */
 export const FALLBACK_STATUSES: OrderStatusRow[] = [
-  { key: "pending",          label: "Pending",    sortOrder: 10, isOpen: true,  isGate: true,  deliveryOnly: false, commitsStock: false, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "accent", hint: "New in. Nobody has accepted these yet." },
-  { key: "confirmed",        label: "Confirmed",  sortOrder: 20, isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "warn",   hint: "Accepted, not started." },
-  { key: "preparing",        label: "Preparing",  sortOrder: 30, isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "brand",  hint: "Being made now." },
-  { key: "ready",            label: "Ready",      sortOrder: 40, isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "ok",     hint: "Waiting for the customer." },
-  { key: "out_for_delivery", label: "On the way", sortOrder: 50, isOpen: true,  isGate: false, deliveryOnly: true,  commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "ink",    hint: "Left the shop." },
-  { key: "completed",        label: "Completed",  sortOrder: 60, isOpen: false, isGate: false, deliveryOnly: false, commitsStock: true,  isFulfilled: true,  isCancellation: false, awaitingCustomer: false, customerNote: null, tone: "ink",    hint: "Done and handed over." },
-  { key: "cancelled",        label: "Cancelled",  sortOrder: 70, isOpen: false, isGate: false, deliveryOnly: false, commitsStock: false, isFulfilled: false, isCancellation: true, awaitingCustomer: false, customerNote: null,  tone: "bad",    hint: "Did not happen." },
+  { key: "pending",          label: "Pending",    sortOrder: 10, isOpen: true,  isGate: true,  deliveryOnly: false, commitsStock: false, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: "We have your order — waiting for the shop to confirm.", tone: "accent", hint: "New in. Nobody has accepted these yet." },
+  { key: "confirmed",        label: "Confirmed",  sortOrder: 20, isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: "Confirmed. It is in the queue.", tone: "warn",   hint: "Accepted, not started." },
+  { key: "preparing",        label: "Preparing",  sortOrder: 30, isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: "Being made right now.", tone: "brand",  hint: "Being made now." },
+  { key: "ready",            label: "Ready",      sortOrder: 40, isOpen: true,  isGate: false, deliveryOnly: false, commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: "Ready and waiting for you.", tone: "ok",     hint: "Waiting for the customer." },
+  { key: "out_for_delivery", label: "On the way", sortOrder: 50, isOpen: true,  isGate: false, deliveryOnly: true,  commitsStock: true, isFulfilled: false, isCancellation: false, awaitingCustomer: false, customerNote: "On the way — keep your phone nearby.", tone: "ink",    hint: "Left the shop." },
+  { key: "completed",        label: "Completed",  sortOrder: 60, isOpen: false, isGate: false, deliveryOnly: false, commitsStock: true,  isFulfilled: true,  isCancellation: false, awaitingCustomer: false, customerNote: "All done. Thank you!", tone: "ink",    hint: "Done and handed over." },
+  { key: "cancelled",        label: "Cancelled",  sortOrder: 70, isOpen: false, isGate: false, deliveryOnly: false, commitsStock: false, isFulfilled: false, isCancellation: true, awaitingCustomer: false, customerNote: "This order did not go ahead.",  tone: "bad",    hint: "Did not happen." },
 ];
 
 /** Every key, in the order the shop works through them. */
@@ -177,6 +179,29 @@ export const railFor = (
     .filter((r) => !r.isCancellation)
     .filter((r) => !r.deliveryOnly || fulfillment === "delivery")
     .sort((a, b) => a.sortOrder - b.sortOrder);
+
+/**
+ * The steps worth showing a customer who has not ordered yet.
+ *
+ * Only the ones the shop has written a note for, capped at six: six is a page
+ * and ten is a manual nobody reads before buying a bouquet. One step is not a
+ * process, so it returns none — and none means the homepage draws no heading,
+ * rather than a heading over an empty space.
+ *
+ * Here rather than in the component because it is a question about data, and
+ * because a component cannot answer it for its caller: `<HowItWorks />` is a
+ * React element whether or not it renders anything, so a page testing the
+ * element for null always drew the heading.
+ */
+export const processSteps = (
+  rows: OrderStatusRow[],
+  limit = 6
+): OrderStatusRow[] => {
+  const steps = railFor(rows, "pickup")
+    .filter((r) => r.customerNote?.trim())
+    .slice(0, limit);
+  return steps.length < 2 ? [] : steps;
+};
 
 /** How far along the rail an order is, or -1 if its step is not on it. */
 export const railIndex = (rail: OrderStatusRow[], key: OrderStatus): number =>

@@ -191,6 +191,40 @@ body {
   font-family: var(--font-sans);
 }
 
+/*
+ * The nav is a fixed height at each breakpoint and only changes its background
+ * on scroll — never its size. Everything that offsets against it reads this,
+ * so there is exactly one source of truth.
+ */
+:root { --nav-h: 72px; }
+@media (min-width: 640px) { :root { --nav-h: 88px; } }
+
+/*
+ * Pulls a dark masthead up behind the transparent sticky nav, so the nav's
+ * pale type always sits on dark.
+ *
+ * Three components already asked for this class and nothing defined it, so
+ * every dark page header sat BELOW the nav instead of behind it — and on the
+ * homepage, where the nav is transparent until you scroll, its links were
+ * pale text on the cream page background. Invisible, on every page, in light
+ * mode.
+ */
+.under-nav {
+  margin-top: calc(-1 * var(--nav-h));
+  padding-top: var(--nav-h);
+}
+
+/*
+ * Nothing may drag the page sideways.
+ *
+ * Scroll-reveal cards start life offset a few dozen pixels to one side, and a
+ * decorative blur is deliberately wider than its section — off the right edge
+ * of a phone, both become a horizontal scrollbar and a page that slides under
+ * the thumb. `clip` rather than `hidden` on purpose: `hidden` would turn the
+ * body into a scroll container and the sticky header would stop sticking.
+ */
+html, body { overflow-x: clip; }
+
 /* Figures that sit in columns line up on the decimal, everywhere. */
 .tabular { font-variant-numeric: tabular-nums; }
 

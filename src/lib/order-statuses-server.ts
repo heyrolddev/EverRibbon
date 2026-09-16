@@ -1,3 +1,4 @@
+import { isConfigured } from "@/lib/auth";
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
@@ -12,6 +13,12 @@ import { FALLBACK_STATUSES, type OrderStatusRow, type StatusTone } from "@/lib/o
  * rather than whenever a cache felt like expiring.
  */
 export const getOrderStatuses = cache(async (): Promise<OrderStatusRow[]> => {
+  // A clone with no credentials yet has no client to make. That is the state
+  // every new shop starts in, and it used to throw out of here and take the
+  // whole homepage down with a 500 — the first thing anyone saw of this
+  // system. The fallback list is exactly what it is for.
+  if (!isConfigured()) return FALLBACK_STATUSES;
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_statuses")

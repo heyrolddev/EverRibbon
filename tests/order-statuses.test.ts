@@ -14,6 +14,7 @@ import {
   railIndex,
   workStartsAt,
   handedOverAt,
+  processSteps,
 } from "../src/lib/order-statuses.ts";
 
 /**
@@ -174,4 +175,17 @@ test("the till finds a step to sell into on either shop", () => {
   assert.equal(handedOverAt(RIBBON), "delivered");
   assert.equal(workStartsAt(FALLBACK_STATUSES), "confirmed");
   assert.equal(handedOverAt(FALLBACK_STATUSES), "completed");
+});
+
+test("the homepage's process section is decided by the data, not by an element", () => {
+  // The shop's own steps, each with something to say to a customer.
+  const withNotes = RIBBON.map((r) => ({ ...r, customerNote: `About ${r.label}.` }));
+  assert.ok(processSteps(withNotes).length >= 2);
+  // Cancellation is not a stage of an order, so it is never a milestone.
+  assert.ok(!processSteps(withNotes).some((s) => s.isCancellation));
+  // A shop that has written none gets no section rather than an empty one.
+  assert.deepEqual(processSteps(RIBBON), []);
+  // And one lonely step is not a process.
+  const one = RIBBON.map((r, i) => ({ ...r, customerNote: i === 0 ? "Only this." : null }));
+  assert.deepEqual(processSteps(one), []);
 });

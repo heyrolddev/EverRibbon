@@ -128,7 +128,15 @@ export function Nav({
       }`}
     >
       <div className="mx-auto flex h-[var(--nav-h)] max-w-6xl items-center justify-between px-6">
-        <Link href="/" aria-label={`${brand.name} — home`} className="group block shrink-0">
+        {/* The tone has to reach the mark too. A shop with no wordmark file
+            draws its name as SVG in `currentColor`, which without this is
+            near-black over the dark hero — the shop's own name, invisible on
+            its own homepage. */}
+        <Link
+          href="/"
+          aria-label={`${brand.name} — home`}
+          className={`group block shrink-0 ${solid ? "text-ink-950" : "text-paper-100"}`}
+        >
           <Logo
             priority
             width={220}
