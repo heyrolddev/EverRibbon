@@ -26,7 +26,7 @@ export const everribbon: BrandConfig = {
   name: "EverRibbon",
   tagline: "Where every ribbon tells a story",
   description:
-    "Hand-made ribbon flower bouquets and foil-printed ribbon for graduations, weddings and birthdays. Made to order in Pampanga.",
+    "Custom ribbon printing, graduation sashes and handcrafted ribbon flower bouquets — made to order in Calumpit, Bulacan.",
 
   locale: "en-PH",
   timeZone: "Asia/Manila",
@@ -35,19 +35,24 @@ export const everribbon: BrandConfig = {
   fulfillment: "made_to_order",
 
   contact: {
-    street: "Apalit",
-    locality: "Apalit",
-    region: "Pampanga",
+    street: "#18 F. Carlos St., Balungao",
+    locality: "Calumpit",
+    region: "Bulacan",
     country: "PH",
     phone: "+63 947 353 3060",
     phoneHref: "+639473533060",
     priceRange: "\u20b1\u20b1",
-    lat: 14.9531856,
-    lng: 120.7576564,
-    mapUrl: "https://maps.google.com/?cid=13918401762537882815",
+    // No pin yet. The ones that were here belonged to the shop this config
+    // was scaffolded from and pointed at a different province — which is the
+    // failure mode this field is nullable for.
+    lat: null,
+    lng: null,
+    mapUrl: null,
   },
 
-  socials: [],
+  socials: [
+    { name: "Facebook", href: "https://www.facebook.com/EverRibbon", handle: "EverRibbon" },
+  ],
 
   /**
    * A ribbon shop sells to people planning one day months out, so the strip
@@ -58,14 +63,14 @@ export const everribbon: BrandConfig = {
     loading: "Tying the ribbon…",
     badge: "MADE TO ORDER",
     strip: [
-      "Ribbon flower bouquets",
-      "Foil-printed ribbon",
-      "Graduations & weddings",
-      "Nationwide shipping",
-      "Custom orders welcome",
+      "Custom ribbon prints",
+      "Graduation sashes & sablay",
+      "EverCraft flower bouquets",
+      "Weddings & pageants",
+      "Card printing & invitations",
     ],
     catalogueBlurb:
-      "ribbon flower bouquets, foil-printed ribbon for graduations, weddings and birthdays",
+      "printed ribbon, graduation sashes and handcrafted ribbon flower bouquets",
     businessNoun: "a ribbon printer and bouquet maker",
     termsClause: {
       title: "Handmade, and the colours",
@@ -78,16 +83,16 @@ export const everribbon: BrandConfig = {
         "you order and we will check the roll against it first.",
     },
     keywords: [
-      "ribbon flower bouquet Philippines",
-      "ribbon flowers Pampanga",
-      "personalized ribbon printing",
-      "foil printed ribbon Philippines",
-      "graduation bouquet Pampanga",
+      "customized ribbon printing Bulacan",
+      "personalized ribbon print Philippines",
+      "graduation sash Bulacan",
+      "sablay printing Philippines",
+      "ribbon flower bouquet Bulacan",
+      "graduation bouquet Calumpit",
       "wedding ribbon Philippines",
       "handmade ribbon flowers",
       "bouquet na hindi nalalanta",
-      "ribbon bouquet Apalit",
-      "customized ribbon printing Pampanga",
+      "personalized giveaways Bulacan",
     ],
   },
 

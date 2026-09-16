@@ -121,10 +121,19 @@ export type BrandConfig = {
     phoneHref: string;
     /** As a search engine grades it — "$$", "₱₱". */
     priceRange: string;
-    lat: number;
-    lng: number;
+    /**
+     * The pin, or null until somebody has actually dropped one.
+     *
+     * Nullable because a wrong pin is worse than no pin: it sends people to
+     * a building that is not the shop, and it is exactly the field that gets
+     * copied from whatever the config was forked from. Absent, the structured
+     * data omits the geo block; a search engine then places the business from
+     * its postal address, which is at least the address the shop typed.
+     */
+    lat: number | null;
+    lng: number | null;
     /** The map listing addressed by its own id, not by a copied viewport URL. */
-    mapUrl: string;
+    mapUrl: string | null;
   };
 
   /** Rendered in this order, so put the one the shop actually uses first. */
@@ -282,8 +291,14 @@ export function validateBrand(b: BrandConfig): BrandConfig {
     if (!c?.[k]?.trim()) fail(`contact.${k} is required`);
   if (!/^\+?[0-9]+$/.test(c.phoneHref)) fail("contact.phoneHref must be dial-able: digits and an optional +");
   if (!/^[A-Z]{2}$/.test(c.country)) fail("contact.country must be a 2-letter ISO code");
-  if (!Number.isFinite(c.lat) || Math.abs(c.lat) > 90) fail("contact.lat must be a latitude");
-  if (!Number.isFinite(c.lng) || Math.abs(c.lng) > 180) fail("contact.lng must be a longitude");
+  // Both or neither: half a coordinate places a shop on the equator or on
+  // the prime meridian, which is a real place and not this one.
+  if ((c.lat === null) !== (c.lng === null))
+    fail("contact.lat and contact.lng must both be set, or both be null");
+  if (c.lat !== null && (!Number.isFinite(c.lat) || Math.abs(c.lat) > 90))
+    fail("contact.lat must be a latitude");
+  if (c.lng !== null && (!Number.isFinite(c.lng) || Math.abs(c.lng) > 180))
+    fail("contact.lng must be a longitude");
 
   for (const k of ["catalogue", "loading", "badge", "catalogueBlurb", "businessNoun"] as const)
     if (!b.copy?.[k]?.trim()) fail(`copy.${k} is required`);

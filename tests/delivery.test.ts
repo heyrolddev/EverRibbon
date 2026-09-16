@@ -6,7 +6,6 @@ import {
   quoteDelivery,
   type DeliverySettings,
 } from "../src/lib/delivery.ts";
-import { SHOP } from "../src/lib/site.ts";
 
 /**
  * What a delivery costs, and who is refused one.
@@ -17,7 +16,17 @@ import { SHOP } from "../src/lib/site.ts";
  * being wrong.
  */
 
-const settings: DeliverySettings = { ...DEFAULT_DELIVERY };
+/*
+ * An origin of its own, rather than whatever the defaults happen to carry.
+ *
+ * These tests used to read the coordinates out of DEFAULT_DELIVERY, which is
+ * how one shop's actual pin sat in the template as a "helpful starting value"
+ * for a year: the arithmetic was verified against it, so it looked load-bearing
+ * and nobody removed it. It measured every other shop's deliveries from a town
+ * in a different province, and it never failed — it just quoted the wrong fee.
+ */
+const ORIGIN = { lat: 14.9, lng: 120.8 };
+const settings: DeliverySettings = { ...DEFAULT_DELIVERY, shop_lat: ORIGIN.lat, shop_lng: ORIGIN.lng };
 
 /**
  * Quote a drop `km` due north of the stall.
@@ -26,14 +35,29 @@ const settings: DeliverySettings = { ...DEFAULT_DELIVERY };
  * so the straight-line distance is exactly the number asked for and each fee
  * below can be worked out by hand.
  */
-const quoteKmAway = (s: DeliverySettings, km: number, subtotal: number) =>
-  quoteDelivery(s, s.shop_lat + km / 111.32, s.shop_lng, subtotal);
+const quoteKmAway = (s: DeliverySettings, km: number, subtotal: number) => {
+  // Every case below is about a shop that HAS an origin; the one that has not
+  // gets its own test.
+  if (s.shop_lat === null || s.shop_lng === null) throw new Error("no origin");
+  return quoteDelivery(s, s.shop_lat + km / 111.32, s.shop_lng, subtotal);
+};
 
-test("the delivery origin is the shop's own pin", () => {
-  // These drifted apart once — 270 m — and nobody noticed, because both
-  // numbers look plausible on their own.
-  assert.equal(settings.shop_lat, SHOP.lat);
-  assert.equal(settings.shop_lng, SHOP.lng);
+test("the template ships no delivery origin of its own", () => {
+  /*
+   * This test used to assert the opposite — that the default origin equalled
+   * the config's coordinates — and in doing so it held the bug in place. One
+   * shop's real pin was written into the template as a "helpful starting
+   * value", and a green test saying the two matched made it look deliberate.
+   *
+   * Every other shop then measured its deliveries from that town. Nothing
+   * failed. The fee was just wrong, every time, and plausible enough that
+   * nobody queried it.
+   *
+   * A starting value that is right for exactly one shop is not a default; it
+   * is that shop's data in everybody else's install.
+   */
+  assert.equal(DEFAULT_DELIVERY.shop_lat, null);
+  assert.equal(DEFAULT_DELIVERY.shop_lng, null);
 });
 
 test("distance is zero at the shop and symmetric", () => {
@@ -103,4 +127,14 @@ test("numeric settings arriving as strings still add up", () => {
   const q = quoteKmAway(fromDb, 4, 300);
   assert.ok(q.ok);
   assert.equal(q.fee, 62);
+});
+
+
+test("a shop that has not marked where it delivers from quotes nobody", () => {
+  // The alternative is quoting from a guess, which does not fail — it charges
+  // the wrong fee, every time, with total confidence.
+  const q = quoteDelivery(DEFAULT_DELIVERY, 14.9, 120.8, 500);
+  assert.equal(q.ok, false);
+  assert.match(q.reason ?? "", /isn't set up yet/);
+  assert.equal(DEFAULT_DELIVERY.shop_lat, null, "the template ships no origin");
 });

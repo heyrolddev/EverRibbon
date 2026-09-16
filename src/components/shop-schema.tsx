@@ -86,11 +86,14 @@ export async function ShopSchema() {
     //
     // The single most useful thing on this block for "near me": an address
     // string has to be geocoded and guessed at, a coordinate does not.
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: SHOP.lat,
-      longitude: SHOP.lng,
-    },
+    // Omitted rather than guessed when no pin has been dropped. A search
+    // engine then places the business from its postal address, which is at
+    // least the address the shop typed; a coordinate copied from whatever
+    // this config was forked from is a different building in a different
+    // province, stated with total confidence.
+    ...(SHOP.lat !== null && SHOP.lng !== null
+      ? { geo: { "@type": "GeoCoordinates", latitude: SHOP.lat, longitude: SHOP.lng } }
+      : {}),
 
     // The radius the shop will actually travel, read from the settings that
     // enforce it at checkout — so what Google is told and what a customer is

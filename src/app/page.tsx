@@ -406,14 +406,18 @@ export default async function Home() {
               >
                 {brand.contact.phone}
               </a>
-              <a
-                href={brand.contact.mapUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-full px-6 py-3 text-sm font-bold ring-1 ring-paper-100/30 transition-colors hover:bg-paper-100/10"
-              >
-                Open in maps
-              </a>
+              {/* Only once somebody has dropped a real pin. A map link that
+                  opens on the wrong town is worse than no link at all. */}
+              {brand.contact.mapUrl && (
+                <a
+                  href={brand.contact.mapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full px-6 py-3 text-sm font-bold ring-1 ring-paper-100/30 transition-colors hover:bg-paper-100/10"
+                >
+                  Open in maps
+                </a>
+              )}
             </div>
 
             {brand.socials.length > 0 && <SocialLinks tone="dark" className="mt-7" />}

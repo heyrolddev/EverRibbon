@@ -109,7 +109,11 @@ export default async function AccountPage() {
         </div>
 
         <AccountForm
-          shop={{ lat: delivery.shop_lat, lng: delivery.shop_lng }}
+          shop={
+            delivery.shop_lat !== null && delivery.shop_lng !== null
+              ? { lat: delivery.shop_lat, lng: delivery.shop_lng }
+              : null
+          }
           initial={{
             fullName: p?.full_name ?? "",
             phone: p?.phone ?? "",

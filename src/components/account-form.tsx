@@ -22,7 +22,8 @@ export function AccountForm({
     lat: number | null;
     lng: number | null;
   };
-  shop: Pin;
+  /** Where the shop is, or null before anyone has marked it. */
+  shop: Pin | null;
 }) {
   const router = useRouter();
   const [fullName, setFullName] = useState(initial.fullName);

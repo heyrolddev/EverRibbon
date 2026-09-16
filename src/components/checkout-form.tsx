@@ -105,7 +105,10 @@ export function CheckoutForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const shop = { lat: delivery.shop_lat, lng: delivery.shop_lng };
+  const shop =
+    delivery.shop_lat !== null && delivery.shop_lng !== null
+      ? { lat: delivery.shop_lat, lng: delivery.shop_lng }
+      : null;
 
   // Preview only — the server recomputes this and stores its own figure.
   const usingSaved =

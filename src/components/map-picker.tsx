@@ -8,6 +8,19 @@ import "leaflet/dist/leaflet.css";
 export type Pin = { lat: number; lng: number };
 
 /**
+ * Somewhere to point the map when nothing else says where.
+ *
+ * Only ever a first view — the moment either pin exists, it wins. Read from
+ * the config's own country rather than written in, so the fallback is not one
+ * country's centre pretending to be everyone's.
+ */
+const COUNTRY_CENTRES: Record<string, Pin> = {
+  PH: { lat: 12.8797, lng: 121.774 },
+};
+const COUNTRY_CENTRE: Pin =
+  COUNTRY_CENTRES[brand.contact.country] ?? { lat: 0, lng: 0 };
+
+/**
  * Free pin-drop map on OpenStreetMap tiles — no API key, no billing, no
  * per-request cost, which is why this is here rather than Google Maps.
  *
@@ -22,7 +35,8 @@ export function MapPicker({
 }: {
   value: Pin | null;
   onChange: (pin: Pin) => void;
-  shop: Pin;
+  /** Where the shop is, or null before anyone has marked it. */
+  shop: Pin | null;
   height?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,7 +57,9 @@ export function MapPicker({
       const L = (await import("leaflet")).default;
       if (cancelled || !containerRef.current || mapRef.current) return;
 
-      const start = value ?? shop;
+      // With neither a dropped pin nor a shop, centre on the country the
+      // shop trades in rather than on the Atlantic, which is where (0, 0) is.
+      const start = value ?? shop ?? COUNTRY_CENTRE;
       const map = L.map(containerRef.current, {
         center: [start.lat, start.lng],
         zoom: value ? 16 : 14,
@@ -71,7 +87,8 @@ export function MapPicker({
         iconAnchor: [9, 9],
       });
 
-      L.marker([shop.lat, shop.lng], { icon: shopIcon, interactive: false })
+      if (shop)
+        L.marker([shop.lat, shop.lng], { icon: shopIcon, interactive: false })
         .addTo(map)
         .bindTooltip(brand.name, { permanent: false });
 

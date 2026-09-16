@@ -54,10 +54,11 @@ export function DeliverySettingsForm({ initial }: { initial: DeliverySettings })
   const router = useRouter();
 
   const [isEnabled, setIsEnabled] = useState(initial.is_enabled);
-  const [shopPin, setShopPin] = useState<Pin>({
-    lat: initial.shop_lat,
-    lng: initial.shop_lng,
-  });
+  const [shopPin, setShopPin] = useState<Pin | null>(
+    initial.shop_lat !== null && initial.shop_lng !== null
+      ? { lat: initial.shop_lat, lng: initial.shop_lng }
+      : null
+  );
   const [baseFee, setBaseFee] = useState(String(initial.base_fee));
   const [baseKm, setBaseKm] = useState(String(initial.base_km));
   const [perKmFee, setPerKmFee] = useState(String(initial.per_km_fee));
@@ -73,6 +74,8 @@ export function DeliverySettingsForm({ initial }: { initial: DeliverySettings })
   // A live worked example, so the owner can see what the numbers actually
   // charge before saving them rather than guessing.
   const preview = useMemo(() => {
+    // Nothing to work an example from until the shop is on the map.
+    if (!shopPin) return [];
     const settings: DeliverySettings = {
       is_enabled: true,
       shop_lat: shopPin.lat,
@@ -99,6 +102,10 @@ export function DeliverySettingsForm({ initial }: { initial: DeliverySettings })
     setError(null);
     setSaved(false);
     try {
+      if (!shopPin) {
+        setBusy(false);
+        return setError("Mark where you deliver from first — tap the map.");
+      }
       const res = await saveDeliverySettings({
         isEnabled,
         shopLat: shopPin.lat,
@@ -165,7 +172,9 @@ export function DeliverySettingsForm({ initial }: { initial: DeliverySettings })
           height={280}
         />
         <p className="mt-2 font-mono text-xs text-ink-900/50">
-          {shopPin.lat.toFixed(6)}, {shopPin.lng.toFixed(6)}
+          {shopPin
+            ? `${shopPin.lat.toFixed(6)}, ${shopPin.lng.toFixed(6)}`
+            : "Not marked yet — tap the map. Until you do, delivery is offered to nobody."}
         </p>
       </section>
 

@@ -9,8 +9,9 @@
 
 export type DeliverySettings = {
   is_enabled: boolean;
-  shop_lat: number;
-  shop_lng: number;
+  /** Where the shop measures from. Null until somebody has dropped the pin. */
+  shop_lat: number | null;
+  shop_lng: number | null;
   base_fee: number;
   base_km: number;
   per_km_fee: number;
@@ -22,12 +23,16 @@ export type DeliverySettings = {
 
 export const DEFAULT_DELIVERY: DeliverySettings = {
   is_enabled: true,
-  // The stall itself (SHOP.lat/lng), so a shop that has never opened the
-  // delivery settings still measures from the right place. Kept as literals
-  // rather than importing SHOP: this is a starting value the owner is meant to
-  // be able to move, not a mirror that snaps back.
-  shop_lat: 14.9531856,
-  shop_lng: 120.7576564,
+  //
+  // No origin until somebody sets one.
+  //
+  // This used to be one shop's actual coordinates, written in as a helpful
+  // starting point. On any other shop it measured every delivery from a town
+  // in a different province — and it did not fail, it just quoted the wrong
+  // fee, every time, with total confidence. A missing origin has to be
+  // visible; a wrong one never is.
+  shop_lat: null,
+  shop_lng: null,
   base_fee: 30,
   base_km: 2,
   per_km_fee: 10,
@@ -73,6 +78,15 @@ export function quoteDelivery(
   lng: number,
   subtotal: number
 ): Quote {
+  if (settings.shop_lat === null || settings.shop_lng === null) {
+    return {
+      ok: false,
+      km: 0,
+      reason:
+        "Delivery isn't set up yet — the shop hasn't marked where it delivers from. Please choose pickup.",
+    };
+  }
+
   const straight = distanceKm(settings.shop_lat, settings.shop_lng, lat, lng);
   const km = Math.round(straight * ROUTE_FACTOR * 10) / 10;
 
