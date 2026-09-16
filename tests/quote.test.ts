@@ -216,3 +216,69 @@ test("the deposit and the balance add up to the total, to the centavo", () => {
   // And the deposit is an amount that can actually be transferred.
   assert.equal(r.deposit, Math.round(r.deposit * 100) / 100);
 });
+
+/**
+ * A listed product quoted at its own price.
+ *
+ * The shop publishes a ladder on its ribbon and a customer can read it. A
+ * quote that prices the same rolls from a margin target instead will disagree
+ * with the price list — and it is the price list the customer is holding.
+ */
+const RIBBON_LADDER = [
+  { minQty: 5, unitPrice: 450 },
+  { minQty: 10, unitPrice: 400 },
+];
+const ribbonLine = (qty: number) => ({
+  label: 'Cut-edge ribbon 1/2" — basic ink',
+  qty,
+  minutesEach: 0,
+  materialsEach: 0,
+  priceEach: null,
+  listPrice: 500,
+  breaks: RIBBON_LADDER,
+});
+
+test("a listed product quotes at the price list, not at the margin target", () => {
+  const r = quote({ ...base, lines: [ribbonLine(1)] });
+  assert.equal(r.lines[0]?.source, "list");
+  near(r.goods, 500, "one roll");
+});
+
+test("ten rolls quote at the ten-roll price without anyone looking it up", () => {
+  // The reason the ladder exists. Priced by hand, this is the step that gets
+  // forgotten — and forgetting it upward is a customer reading ₱400 on the
+  // price list and ₱500 on their quote.
+  near(quote({ ...base, lines: [ribbonLine(4)] }).goods, 2000, "4 rolls");
+  near(quote({ ...base, lines: [ribbonLine(5)] }).goods, 2250, "5 rolls");
+  near(quote({ ...base, lines: [ribbonLine(10)] }).goods, 4000, "10 rolls");
+  near(quote({ ...base, lines: [ribbonLine(12)] }).goods, 4800, "12 rolls");
+});
+
+test("a typed price still beats the price list", () => {
+  // A negotiated price is a decision. Nothing overrides a person.
+  const r = quote({ ...base, lines: [{ ...ribbonLine(10), priceEach: 380 }] });
+  assert.equal(r.lines[0]?.source, "typed");
+  near(r.goods, 3800, "as agreed");
+});
+
+test("something not in the catalogue still takes the target", () => {
+  const r = quote({ ...base, lines: [line()] });
+  assert.equal(r.lines[0]?.source, "target");
+  near(r.marginPercent, 60, "margin reached");
+});
+
+test("a zero list price is not a price, so the target decides", () => {
+  // Personalised giveaways are listed at zero deliberately — "ask for a
+  // quote". Quoting them AT zero would be the one reading of that which is
+  // certainly wrong.
+  const r = quote({ ...base, lines: [{ ...line(), listPrice: 0 }] });
+  assert.equal(r.lines[0]?.source, "target");
+  assert.ok(r.goods > 0, "not free");
+});
+
+test("listed and custom lines sit on the same quote", () => {
+  const r = quote({ ...base, lines: [ribbonLine(10), line()] });
+  assert.equal(r.lines[0]?.source, "list");
+  assert.equal(r.lines[1]?.source, "target");
+  near(r.lines[0]?.price ?? 0, 4000, "the rolls");
+});

@@ -40,24 +40,44 @@ export default async function AdminQuotesPage() {
   // rather than as free.
   const costed = can(viewer, "costs");
 
-  const [operating, days, products, book] = await Promise.all([
+  const [operating, days, products, ladders, book] = await Promise.all([
     getOperating(),
     capacityRange(today, addDays(today, DAYS_AHEAD)),
     supabase
       .from("products")
-      .select("id, name, assembly_minutes")
+      .select("id, name, price, assembly_minutes")
       .eq("is_available", true)
       .order("name"),
+    // The shop's own volume ladders, so a quote for ten rolls is the price
+    // the customer can already read on the catalogue page.
+    supabase
+      .from("product_price_breaks")
+      .select("product_id, min_qty, unit_price")
+      .order("min_qty"),
     costed ? loadCostBook() : Promise.resolve(null),
   ]);
 
+  const breaksByProduct = new Map<string, { minQty: number; unitPrice: number }[]>();
+  for (const r of (ladders.data ?? []) as {
+    product_id: string;
+    min_qty: number;
+    unit_price: number;
+  }[]) {
+    const list = breaksByProduct.get(r.product_id) ?? [];
+    list.push({ minQty: Number(r.min_qty), unitPrice: Number(r.unit_price) });
+    breaksByProduct.set(r.product_id, list);
+  }
+
   const presets: Preset[] = (products.data ?? []).map((p) => {
-    const cost = book?.mealCosts.get(String(p.id));
+    const id = String(p.id);
+    const cost = book?.mealCosts.get(id);
     return {
-      id: String(p.id),
+      id,
       name: String(p.name),
       minutes: Number(p.assembly_minutes) || 0,
       materials: cost?.costed ? cost.cost : null,
+      price: Number(p.price) || 0,
+      breaks: breaksByProduct.get(id) ?? [],
     };
   });
 

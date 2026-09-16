@@ -22,6 +22,7 @@
  */
 
 import { brand } from "../../config/index.ts";
+import { unitPriceAt, type PriceBreak } from "./price-breaks.ts";
 import type { Operating } from "./operating.ts";
 
 /**
@@ -44,13 +45,23 @@ export type QuoteLine = {
   /** Cost of the materials in ONE of these. */
   materialsEach: number;
   /**
-   * What to charge for one, or `null` to let the target uplift decide.
+   * What to charge for one, typed by a person, or `null` to work it out.
    *
-   * A line may be priced by hand while its neighbours are priced from the
-   * target: a customer who negotiated one item down has not renegotiated the
-   * rest of the quote.
+   * A line may be priced by hand while its neighbours are not: a customer who
+   * negotiated one item down has not renegotiated the rest of the quote.
    */
   priceEach: number | null;
+  /**
+   * The catalogue price for this thing, when it is something the shop
+   * already sells, or null when it is not.
+   *
+   * Quoting a listed product at a made-up margin is how a shop ends up
+   * charging one customer more than its own price list says — and the
+   * customer can read the price list.
+   */
+  listPrice?: number | null;
+  /** The volume ladder on that list price, if it has one. */
+  breaks?: PriceBreak[];
 };
 
 export type QuoteInput = {
@@ -71,7 +82,20 @@ export type QuoteInput = {
   op: Operating;
 };
 
+/**
+ * Where a line's price came from. Shown on screen, because "why is this
+ * ₱400" is the question a quote gets asked most.
+ */
+export type PriceSource =
+  /** A person typed it. Nothing overrides it. */
+  | "typed"
+  /** The shop's own price list, at this quantity. */
+  | "list"
+  /** Worked out from the target margin or markup. */
+  | "target";
+
 export type PricedLine = QuoteLine & {
+  source: PriceSource;
   /** True when the price came from the target rather than from a person. */
   derived: boolean;
   minutes: number;
@@ -158,8 +182,9 @@ export function priceFor(cost: number, uplift: Uplift, percent: number): number 
  *      the lines by unit before pricing, because otherwise a shop asking for
  *      60% gets 49.6%: an overhead that sits in the cost and in no price is
  *      an overhead the customer never pays for.
- *   3. Unpriced lines take the target uplift, on their own cost plus that
- *      share. Priced lines are left exactly as typed.
+ *   3. Unpriced lines take the catalogue price at their quantity where the
+ *      shop publishes one, and the target uplift where it does not. Priced
+ *      lines are left exactly as typed.
  *   4. The rush fee applies to the goods and not to delivery: the rider is
  *      not working any faster.
  *   5. Delivery is added whole, then the discount comes off the total.
@@ -188,11 +213,35 @@ export function quote(input: QuoteInput): QuoteResult {
     // shows a number rather than a NaN.
     const share =
       units > 0 ? perOrder * (qty / units) : perOrder / input.lines.length;
-    const derived = l.priceEach === null;
-    const price = derived
-      ? priceFor(cost + share, input.uplift.kind, input.uplift.percent)
-      : pos(l.priceEach ?? 0) * qty;
-    return { ...l, derived, minutes, materials, labour, consumables, cost, price };
+    /*
+     * Three places a price can come from, in this order:
+     *
+     *   typed    a person decided. Nothing overrides a person.
+     *   list     the shop's own catalogue, at THIS quantity — so ten rolls
+     *            quote at the ten-roll price without anybody remembering to
+     *            look it up, which is the whole reason the ladder exists.
+     *   target   nothing published covers it, so the margin decides.
+     */
+    let source: PriceSource;
+    let price: number;
+    if (l.priceEach !== null && l.priceEach !== undefined) {
+      source = "typed";
+      price = pos(l.priceEach) * qty;
+    } else if (l.listPrice !== null && l.listPrice !== undefined && l.listPrice > 0) {
+      source = "list";
+      price = unitPriceAt(l.listPrice, l.breaks ?? [], qty) * qty;
+    } else {
+      source = "target";
+      price = priceFor(cost + share, input.uplift.kind, input.uplift.percent);
+    }
+
+    return {
+      ...l,
+      source,
+      // Kept for readers that only ask "did a person choose this".
+      derived: source !== "typed",
+      minutes, materials, labour, consumables, cost, price,
+    };
   });
 
   const sum = (pick: (l: PricedLine) => number) =>

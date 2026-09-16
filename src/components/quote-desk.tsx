@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { brand } from "../../config/index.ts";
 import { money, quantity, duration, addDays, formatDate } from "@/lib/format";
+import { nextSaving, type PriceBreak } from "@/lib/price-breaks";
 import {
   quote,
   marginAt,
@@ -35,9 +36,17 @@ export type Preset = {
   minutes: number;
   /** ₱ of materials in one, from its recipe. Null when nothing is costed. */
   materials: number | null;
+  /** What the shop publishes for it. Zero for anything priced per job. */
+  price: number;
+  /** Its volume ladder, if it has one. */
+  breaks: PriceBreak[];
 };
 
-type Row = QuoteLine & { key: number };
+type Row = QuoteLine & {
+  key: number;
+  /** The catalogue row a preset came from, so the server can price it itself. */
+  productId: string | null;
+};
 
 const field =
   "w-full rounded-xl border border-ink-950/15 bg-paper-50 px-3 py-2 text-sm " +
@@ -52,6 +61,9 @@ const blank = (): Row => ({
   minutesEach: 0,
   materialsEach: 0,
   priceEach: null,
+  listPrice: null,
+  breaks: [],
+  productId: null,
 });
 
 /** Empty reads as 0 without the field fighting you as you clear it. */
@@ -129,6 +141,13 @@ export function QuoteDesk({
     set(key, {
       label: p.name,
       minutesEach: p.minutes,
+      // The shop's own price comes with it, ladder and all, so ten rolls
+      // quote at the ten-roll price without anyone looking it up. Clearing
+      // the price field hands the line back to the margin target.
+      productId: p.id,
+      listPrice: p.price > 0 ? p.price : null,
+      breaks: p.breaks,
+      priceEach: null,
       // A product nobody has costed prefills nothing rather than zero: zero is
       // a claim that it is free to make, and it would read as pure margin.
       ...(p.materials === null ? {} : { materialsEach: p.materials }),
@@ -156,6 +175,8 @@ export function QuoteDesk({
           minutesEach: r.minutesEach,
           materialsEach: r.materialsEach,
           priceEach: r.priceEach,
+          // The id, not the price. The server looks the price up.
+          productId: r.productId,
         })),
     });
     setSaving(false);
@@ -256,6 +277,21 @@ export function QuoteDesk({
                     </label>
                   </div>
 
+                  {priced && row.qty > 0 && row.listPrice
+                    ? (() => {
+                        const next = nextSaving(row.listPrice, row.breaks ?? [], row.qty);
+                        return next ? (
+                          <button
+                            onClick={() => set(row.key, { qty: next.atQty })}
+                            className="mt-2 w-full rounded-lg bg-ok-600/10 px-3 py-2 text-left text-xs text-ok-700 hover:bg-ok-600/20"
+                          >
+                            {next.atQty} would be {money(next.unitPrice)} each —{" "}
+                            {money(next.savesTotal)} off. Tap to change it.
+                          </button>
+                        ) : null;
+                      })()
+                    : null}
+
                   {priced && row.qty > 0 && (
                     <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-900/60">
                       <span>
@@ -265,7 +301,12 @@ export function QuoteDesk({
                         Charges <strong className="tabular-nums text-ink-950">{money(priced.price)}</strong>
                       </span>
                       <span>{duration(priced.minutes)} of work</span>
-                      {priced.derived ? (
+                      {priced.source === "list" ? (
+                        <span className="rounded-full bg-ok-600/15 px-2 py-0.5 text-ok-700">
+                          your price list
+                          {(row.breaks?.length ?? 0) > 0 ? ", at this quantity" : ""}
+                        </span>
+                      ) : priced.source === "target" ? (
                         <span className="rounded-full bg-ink-950/5 px-2 py-0.5">
                           priced at your target
                         </span>

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { can, getViewer } from "@/lib/auth";
 import { getOperating } from "@/lib/operating-server";
 import { quote, QUOTE_VALID_DAYS, type Uplift } from "@/lib/quote";
+import type { PriceBreak } from "@/lib/price-breaks";
 import { addDays, shopToday } from "@/lib/format";
 
 /**
@@ -39,6 +40,14 @@ export type QuoteDraft = {
     minutesEach: number;
     materialsEach: number;
     priceEach: number | null;
+    /**
+     * The catalogue row this line came from, when it came from one.
+     *
+     * The id, not the price. The price and its ladder are looked up here
+     * from the database — a total arriving from a browser is a total anybody
+     * can type, and this one decides what a customer is charged.
+     */
+    productId?: string | null;
   }[];
 };
 
@@ -57,8 +66,47 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
   const supabase = await createClient();
   const operating = await getOperating();
 
+  /*
+   * The published price for anything on this quote that the shop sells.
+   *
+   * Read here rather than taken from the draft for the same reason the whole
+   * quote is recomputed: the screen and the server run the same function, but
+   * only one of them is allowed to decide what a customer is charged.
+   */
+  const productIds = [...new Set(lines.map((l) => l.productId).filter(Boolean))] as string[];
+  const listed = new Map<string, { price: number; breaks: PriceBreak[] }>();
+  if (productIds.length > 0) {
+    const [{ data: rows }, { data: ladders }] = await Promise.all([
+      supabase.from("products").select("id, price").in("id", productIds),
+      supabase
+        .from("product_price_breaks")
+        .select("product_id, min_qty, unit_price")
+        .in("product_id", productIds),
+    ]);
+    for (const r of (rows ?? []) as { id: string; price: number }[]) {
+      listed.set(String(r.id), { price: Number(r.price) || 0, breaks: [] });
+    }
+    for (const b of (ladders ?? []) as {
+      product_id: string;
+      min_qty: number;
+      unit_price: number;
+    }[]) {
+      listed
+        .get(String(b.product_id))
+        ?.breaks.push({ minQty: Number(b.min_qty), unitPrice: Number(b.unit_price) });
+    }
+  }
+
   const priced = quote({
-    lines: lines.map((l) => ({ ...l, label: l.label.trim() })),
+    lines: lines.map((l) => {
+      const row = l.productId ? listed.get(l.productId) : undefined;
+      return {
+        ...l,
+        label: l.label.trim(),
+        listPrice: row?.price ?? null,
+        breaks: row?.breaks ?? [],
+      };
+    }),
     uplift: { kind: draft.upliftKind, percent: draft.upliftPercent },
     deliveryFee: draft.deliveryFee,
     discount: draft.discount,
@@ -116,9 +164,12 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
   }
 
   const { error: lineError } = await supabase.from("order_lines").insert(
-    priced.lines.map((l) => ({
+    priced.lines.map((l, i) => ({
       order_id: order.id,
-      product_id: null,
+      // A line that IS a catalogue product says so, so the stock engine and
+      // the best-seller tally see it as one. Only the bespoke lines carry a
+      // label instead.
+      product_id: lines[i]?.productId ?? null,
       qty: l.qty,
       // Per unit, as the rest of the system reads it.
       price_at_sale: l.qty > 0 ? l.price / l.qty : 0,
