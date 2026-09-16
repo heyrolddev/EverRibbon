@@ -152,6 +152,26 @@ const behaviours = [
   }, "1",
    "None means no order ever counts as a sale; two means revenue is counted twice."],
 
+  ["a fresh install inherits nobody's delivery pin", () => {
+    // The same coordinates were written into this template three times, and
+    // this was the copy that made the state unreachable: DEFAULT plus NOT
+    // NULL, so every install measured deliveries from one shop's town and
+    // could not be told otherwise.
+    return scalar(
+      "select coalesce(shop_lat::text, 'null') || ',' || " +
+      "coalesce(shop_lng::text, 'null') from delivery_settings where id = 1"
+    );
+  }, "null,null",
+   "A guessed origin does not fail — it quotes the wrong fee, every time."],
+
+  ["half a delivery pin is refused", () => {
+    try {
+      psql(["-c", "update delivery_settings set shop_lat = 14.9, shop_lng = null where id = 1"]);
+      return "accepted";
+    } catch { return "refused"; }
+  }, "refused",
+   "One coordinate without the other is a point on the equator."],
+
   ["a line that is neither a product nor a description is refused", () => {
     try {
       psql(["-c", "insert into order_lines (order_id, product_id, qty, price_at_sale) " +
