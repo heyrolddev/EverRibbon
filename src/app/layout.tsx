@@ -1,3 +1,5 @@
+import { BrandAssetsProvider } from "@/components/brand-assets-provider";
+import { getBrandAssets } from "@/lib/brand-assets-server";
 import type { Metadata, Viewport } from "next";
 import { Bodoni_Moda, Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
@@ -129,10 +131,13 @@ if(hq||window.matchMedia('(prefers-reduced-motion: reduce)').matches){
 }catch(e){document.documentElement.setAttribute('data-intro','skip');}})();`;
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const [viewer, chat, activeOrders] = await Promise.all([
+  const [viewer, chat, activeOrders, brandAssets] = await Promise.all([
     getViewer(),
     getChatSettings(),
     countActiveOrders(),
+    // Read once here rather than in every component that draws the mark:
+    // the nav and the preloader are client components and cannot ask.
+    getBrandAssets(),
   ]);
 
   return (
@@ -155,6 +160,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: introScript }} />
       </head>
       <body className="flex min-h-full flex-col bg-paper-50 font-sans text-ink-950">
+        <BrandAssetsProvider assets={brandAssets}>
         <CartProvider staff={isStaff(viewer)}>
           {/* Mounted everywhere on purpose. It skips itself inside HQ via the
               data-intro attribute the head script sets; unmounting it while
@@ -196,6 +202,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <SiteFooter year={new Date().getFullYear()} staff={isStaff(viewer)} />
           </ShopChrome>
         </CartProvider>
+        </BrandAssetsProvider>
       </body>
     </html>
   );

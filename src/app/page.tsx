@@ -180,7 +180,7 @@ export default async function Home() {
             {brand.copy.badge}
           </p>
 
-          <Logo width={520} priority className="h-auto w-[min(100%,26rem)]" />
+          <Logo ground="dark" width={520} priority className="h-auto w-[min(100%,26rem)]" />
 
           <p className="max-w-[24ch] font-display text-3xl leading-[1.12] text-paper-100 sm:text-5xl">
             {brand.tagline}

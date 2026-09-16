@@ -1,30 +1,47 @@
+"use client";
+
 import { brand } from "../../config/index.ts";
 import Image from "next/image";
+import { markFor } from "@/lib/brand-assets";
+import { useBrandAssets } from "@/components/brand-assets-provider";
 
 /**
  * The shop's wordmark.
  *
- * Kept as an image rather than as markup because a wordmark is artwork a shop
- * owns, not something a template should try to draw. But a new shop does not
- * have that artwork on its first day, and `brand.wordmark: null` is the
- * supported answer for that: the name is set in the shop's display face until
- * the real mark arrives. The alternative — pointing at a file that isn't
- * there — renders a broken image icon in the header and the footer of every
- * page, which is what this replaced.
+ * Artwork a shop owns, so it is never drawn here — it is uploaded in HQ and
+ * read from the settings row, with the config as the floor for a shop that
+ * has not uploaded one yet. Asking a developer to commit a PNG is how a shop
+ * runs for three months with its name set in a fallback face.
  *
- * `width` is the drawn width in CSS pixels; the height follows the artwork's
- * own aspect ratio so the space is reserved before the file loads.
+ * Three cases, in order:
+ *
+ *   the mark for this ground   a gold mark on black and a legible one on
+ *                              cream are two different files, and `ground`
+ *                              says which this instance sits on
+ *   the light mark             when no dark version has been uploaded
+ *   the name, set as SVG       when there is no artwork at all
+ *
+ * The last is not a placeholder. A new shop has no logo on its first day, and
+ * a broken image icon in the header of every page is worse than the name set
+ * well in the shop's own display face.
  */
 export function Logo({
   className = "",
   width = 200,
   priority = false,
+  /**
+   * What this sits on. `dark` picks the mark drawn for a dark ground; the
+   * text fallback takes `currentColor` either way, so the caller's own colour
+   * still decides that.
+   */
+  ground = "light",
 }: {
   className?: string;
   width?: number;
   priority?: boolean;
+  ground?: "light" | "dark";
 }) {
-  const mark = brand.wordmark;
+  const mark = markFor(useBrandAssets(), ground);
 
   if (!mark) {
     // Set as SVG rather than as a styled <span>, because every caller sizes

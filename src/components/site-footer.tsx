@@ -29,7 +29,7 @@ export function SiteFooter({
     <footer className="grain relative overflow-hidden bg-ink-950 text-paper-100">
       <div className="mx-auto grid max-w-5xl gap-10 px-6 py-14 sm:grid-cols-3">
         <div>
-          <Logo width={220} className="h-auto w-[180px]" />
+          <Logo ground="dark" width={220} className="h-auto w-[180px]" />
           <p className="mt-4 text-sm text-paper-100/60">{brand.tagline}</p>
 
           {/* Marks rather than a list of handles: customers already know

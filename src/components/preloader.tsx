@@ -61,7 +61,7 @@ export function Preloader() {
           />
 
           <div className="relative">
-            <Logo width={320} priority className="h-auto w-[220px] sm:w-[300px]" />
+            <Logo ground="dark" width={320} priority className="h-auto w-[220px] sm:w-[300px]" />
           </div>
 
           {/* One shape for every shop, drawn in the shop's own colours. A

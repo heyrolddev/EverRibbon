@@ -138,6 +138,10 @@ export function Nav({
           className={`group block shrink-0 ${solid ? "text-ink-950" : "text-paper-100"}`}
         >
           <Logo
+            // The nav's ground changes as you scroll: transparent over the
+            // dark hero, cream once it solidifies. The mark has to change
+            // with it or it is unreadable at one end or the other.
+            ground={solid ? "light" : "dark"}
             priority
             width={220}
             className="h-auto w-[120px] transition-transform duration-300 group-hover:scale-105 sm:w-[150px]"

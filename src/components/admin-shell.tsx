@@ -105,6 +105,10 @@ const GROUPS: Group[] = [
   {
     title: "Set up once",
     items: [
+      // First in this group: it is the one thing a brand-new shop wants to
+      // change before anything else, and until it is set every page shows the
+      // shop's name in a fallback face.
+      { href: "/admin/brand", label: "Logo", icon: "◈", needs: "settings" },
       { href: "/admin/hours", label: "Hours", icon: "◷", needs: "settings" },
       { href: "/admin/capacity", label: "Capacity", icon: "◑", needs: "settings" },
       { href: "/admin/delivery", label: "Delivery", icon: "→", needs: "settings" },
