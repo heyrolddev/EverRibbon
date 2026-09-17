@@ -360,7 +360,9 @@ function OrderCard({
         {Number(order.delivery_fee) > 0 && (
           <>
             <div className="flex justify-between text-sm text-ink-900/70">
-              <span>Food</span>
+              {/* What the shop calls the things it sells. The literal here
+                  was "Food", on a page a ribbon shop's customer reads. */}
+              <span>{brand.copy.catalogue}</span>
               <span>{money(editing ? draftTotal : order.revenue)}</span>
             </div>
             <div className="flex justify-between text-sm text-ink-900/70">
