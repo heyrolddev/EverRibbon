@@ -214,6 +214,57 @@ const behaviours = [
     return scalar("select coalesce(category, 'every job') from spec_questions where key = 'sash_text'");
   }, "every job",
    "Tidying the catalogue must not take the shop's own questions with it."],
+
+  ["a receipt already collected is still readable", () => {
+    // 0021 moved receipts into a private bucket. Dropping the old column
+    // would have taken every screenshot behind an already-confirmed payment
+    // with it, so it is kept and still read.
+    psql(["-c",
+      "update orders set payment_receipt_url = 'https://old/public/receipts/a.jpg' " +
+      "where id = 'ord_test'"]);
+    return scalar(
+      "select coalesce(payment_receipt_path, payment_receipt_url) from orders where id = 'ord_test'"
+    );
+  }, "https://old/public/receipts/a.jpg",
+   "An order whose proof of payment vanished is an argument the shop cannot win."],
+
+  ["the staff view carries the private path", () => {
+    // Staff read orders through this view. A view left behind shows every
+    // receipt as missing, which reads as a customer who never paid.
+    return scalar(
+      "select count(*) from information_schema.columns " +
+      "where table_name = 'orders_for_staff' and column_name = 'payment_receipt_path'"
+    );
+  }, "1",
+   "The payments screen would show every new receipt as absent."],
+
+  ["there is exactly one submit_payment_reference", () => {
+    // It was dropped and recreated with a renamed third argument rather than
+    // overloaded. Two three-argument versions differing only in a parameter
+    // name resolve to whichever Postgres picks — and they write to different
+    // columns, so the loser puts a private receipt back in the public one.
+    return scalar(
+      "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace " +
+      "where n.nspname = 'public' and p.proname = 'submit_payment_reference'"
+    );
+  }, "1",
+   "An overload here silently writes the receipt to the wrong column."],
+
+  ["a customer's payment lands on the private column", () => {
+    // The whole point of 0021, proved by running it: the RPC must write the
+    // path and never the public URL.
+    psql(["-c",
+      "update orders set customer_id = '11111111-1111-1111-1111-111111111111', " +
+      "payment_status = 'unpaid', payment_receipt_url = null, payment_receipt_path = null " +
+      "where id = 'ord_test'; " +
+      "set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111'; " +
+      "select submit_payment_reference('ord_test', '', 'receipts/ord_test/x.jpg')"]);
+    return scalar(
+      "select coalesce(payment_receipt_path, 'NOT SET') || '|' || " +
+      "coalesce(payment_receipt_url, 'url empty') from orders where id = 'ord_test'"
+    );
+  }, "receipts/ord_test/x.jpg|url empty",
+   "A receipt written back to the public column is the bug this migration exists to fix."],
 ];
 
 let failed = 0;

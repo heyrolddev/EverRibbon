@@ -3,6 +3,7 @@ import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { NotAllowed } from "@/components/not-allowed";
 import { can, getViewer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { signReceipts } from "@/lib/receipts-server";
 import { getPaymentSettings } from "@/lib/payments-server";
 import { PaymentSettingsForm } from "@/components/payment-settings-form";
 import { PaymentLedger, type LedgerRow } from "@/components/payment-ledger";
@@ -11,7 +12,7 @@ import { isOutstanding, moneyState } from "@/lib/payments";
 import { hqTitle } from "@/lib/hq-theme";
 
 const COLUMNS =
-  "id, created_at, status, contact_name, contact_phone, revenue, delivery_fee, payment_method, payment_status, payment_plan, payment_reference, payment_receipt_url, downpayment_amount, downpayment_confirmed_at";
+  "id, created_at, status, contact_name, contact_phone, revenue, delivery_fee, payment_method, payment_status, payment_plan, payment_reference, payment_receipt_url, payment_receipt_path, downpayment_amount, downpayment_confirmed_at";
 
 async function getLedger(): Promise<{ rows: LedgerRow[]; error: string | null }> {
   try {
@@ -25,7 +26,16 @@ async function getLedger(): Promise<{ rows: LedgerRow[]; error: string | null }>
     // Saying "no payments" when the query failed is the same lie the Orders
     // page used to tell, and here it would read as "nobody owes you anything".
     if (error) return { rows: [], error: error.message };
-    return { rows: (data ?? []) as unknown as LedgerRow[], error: null };
+
+    // The column holds a path into a private bucket, which a browser cannot
+    // open. Swapped for a link that lasts ten minutes, signed for whoever is
+    // looking at this page.
+    const rows = (data ?? []) as unknown as LedgerRow[];
+    const links = await signReceipts(rows);
+    return {
+      rows: rows.map((r) => ({ ...r, payment_receipt_url: links.get(r.id) ?? null })),
+      error: null,
+    };
   } catch (e) {
     return { rows: [], error: e instanceof Error ? e.message : "Unknown error" };
   }

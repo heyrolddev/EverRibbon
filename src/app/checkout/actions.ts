@@ -4,7 +4,8 @@ import { brand } from "../../../config/index.ts";
 import { createClient } from "@/lib/supabase/server";
 import { getSchedule } from "@/lib/hours-server";
 import { canScheduleFor, parseManilaLocal } from "@/lib/hours";
-import { extensionFor, uploadImage, validateImage } from "@/lib/storage";
+import { extensionFor, uploadPrivate, validateImage } from "@/lib/storage";
+import { receiptPath } from "@/lib/receipts";
 import { DEFAULT_DELIVERY, quoteDelivery, type DeliverySettings } from "@/lib/delivery";
 import {
   amountDueNow,
@@ -220,16 +221,36 @@ export async function placeOrder(
     };
   }
 
-  let receiptUrl: string | null = null;
+  /*
+   * Into the PRIVATE bucket, under the id of the order it pays for.
+   *
+   * It used to be keyed on the CUSTOMER's id, in the public bucket. So every
+   * screenshot a person had ever sent shared one guessable prefix, in a
+   * bucket anybody could read — which turns one leaked link into all of
+   * somebody's payments rather than one of them.
+   */
+  /*
+   * The order's id, decided here rather than by the column default.
+   *
+   * The receipt has to be filed under the order it pays for, and the upload
+   * happens before the insert — so somebody has to name the order first. A
+   * failed insert then leaves one orphan file in a private bucket, which is
+   * the cheaper of the two failures: doing it the other way round means an
+   * order that exists with its proof of payment missing, and a customer who
+   * is certain they sent it.
+   */
+  const orderId = crypto.randomUUID();
+
+  let receiptFilePath: string | null = null;
   if (receiptFile) {
     const checked = validateImage(receiptFile);
     if ("error" in checked) return { error: checked.error };
-    const uploaded = await uploadImage(
+    const uploaded = await uploadPrivate(
       checked.file,
-      `receipts/${user.id}-${Date.now()}.${extensionFor(checked.file.type)}`
+      receiptPath(orderId, extensionFor(checked.file.type))
     );
     if ("error" in uploaded) return { error: uploaded.error };
-    receiptUrl = uploaded.url;
+    receiptFilePath = uploaded.path;
   }
 
   // A part-payment is only allowed when the shop offers one, and the amount
@@ -323,6 +344,7 @@ export async function placeOrder(
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
+      id: orderId,
       customer_id: user.id,
       scheduled_for: scheduledAt,
       fulfillment: input.fulfillment,
@@ -331,7 +353,7 @@ export async function placeOrder(
       // staff match the reference against their own GCash records.
       payment_status: method === "gcash" ? "submitted" : "unpaid",
       payment_reference: method === "gcash" && reference ? reference : null,
-      payment_receipt_url: receiptUrl,
+      payment_receipt_path: receiptFilePath,
       payment_plan: plan,
       downpayment_amount: downpaymentAmount,
       contact_name: input.contactName.trim(),

@@ -7,7 +7,8 @@ import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { brand } from "../../../config/index.ts";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { extensionFor, uploadImage, validateImage } from "@/lib/storage";
+import { extensionFor, uploadPrivate, validateImage } from "@/lib/storage";
+import { receiptPath } from "@/lib/receipts";
 import { syncStockForStatus } from "@/lib/stock-server";
 import { cartQuantityProblem } from "@/lib/orders";
 
@@ -182,23 +183,26 @@ export async function submitPayment(
     };
   }
 
-  let receiptUrl: string | null = null;
+  // Into the PRIVATE bucket, and what comes back is a path rather than a URL.
+  // This file carries their name, their number, the amount and a reference;
+  // it used to sit in the same bucket as the product photographs.
+  let receiptFilePath: string | null = null;
   if (hasReceipt) {
     const checked = validateImage(file);
     if ("error" in checked) return { error: checked.error };
 
-    const uploaded = await uploadImage(
+    const uploaded = await uploadPrivate(
       checked.file,
-      `receipts/${orderId}-${Date.now()}.${extensionFor(checked.file.type)}`
+      receiptPath(orderId, extensionFor(checked.file.type))
     );
     if ("error" in uploaded) return { error: uploaded.error };
-    receiptUrl = uploaded.url;
+    receiptFilePath = uploaded.path;
   }
 
   const { data, error } = await supabase.rpc("submit_payment_reference", {
     p_order_id: orderId,
     p_reference: reference,
-    p_receipt_url: receiptUrl,
+    p_receipt_path: receiptFilePath,
   });
 
   if (error) {

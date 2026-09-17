@@ -68,6 +68,13 @@ The keys are in the Supabase dashboard under **Settings → API**:
 > screenshot, not committed. `.env.local` is already in `.gitignore`; keep it
 > that way.
 
+`SUPABASE_SERVICE_ROLE_KEY` is not optional any more, on the site as well as
+locally: a customer's GCash screenshot goes into a private bucket, and a
+private bucket cannot be written or read by the customer's own session. With
+the key missing, the site says so and asks them for their reference number
+instead — which works, but is a worse thing to ask of somebody who has
+already taken the screenshot.
+
 Then sign up on the running site, and promote yourself to owner once — in the
 SQL editor:
 
@@ -93,6 +100,29 @@ Settings → Environment Variables**, plus:
 `NEXT_PUBLIC_SITE_URL` is what share cards and canonical links are built
 from. Until a domain exists it can be left unset — the deployment's own URL
 is used instead, so sharing works before anything has been bought.
+
+### The receipts already in the public bucket
+
+Migration 0021 moved payment screenshots into a second, private bucket —
+`everribbon-private`, made automatically the first time one is uploaded. From
+now on nothing serves a receipt without a signed link that lasts ten minutes.
+
+**The ones already uploaded are still in the public bucket**, under
+`everribbon/receipts/`, and still readable by anyone with the address. The
+migration deliberately leaves them alone: they are the evidence behind
+payments already confirmed, and a half-finished move would have lost some of
+them. Moving them is a job for a person with the dashboard open.
+
+When you are ready — Storage → `everribbon` → `receipts`:
+
+1. Check the orders they belong to are settled (HQ → Costs & cash shows you).
+2. Download the folder if you want to keep the evidence off-site.
+3. Delete the folder.
+
+Old orders then show no screenshot, which is honest — the reference number and
+the confirmation are still on the order. Do not move the files into the
+private bucket by hand: the rows point at the public URL, so the link would
+break rather than start working.
 
 ### Before you announce it
 

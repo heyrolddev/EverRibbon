@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { IMAGE_TYPES, MEDIA_BUCKET, checkMedia } from "@/lib/media";
+import { IMAGE_TYPES, MEDIA_BUCKET, PRIVATE_BUCKET, checkMedia } from "@/lib/media";
 
 /**
  * The rules for what may be uploaded live in `media.ts`, not here.
@@ -69,4 +69,58 @@ export async function uploadImage(
     data: { publicUrl },
   } = client.storage.from(MEDIA_BUCKET).getPublicUrl(path);
   return { url: publicUrl };
+}
+
+/**
+ * Uploads to the shop's PRIVATE bucket and returns the path, not a URL.
+ *
+ * A path, because a private object does not have a public URL and that is the
+ * entire point: the only way to see one is a short signed link minted for
+ * somebody the server has already checked. Returning a URL here would be the
+ * old behaviour wearing a new name.
+ *
+ * The service-role client, always. A customer uploading their own GCash
+ * screenshot is legitimately not staff, and there is no storage policy that
+ * lets them write a file nobody may read without also being a policy that
+ * lets them write anywhere.
+ */
+export async function uploadPrivate(
+  file: File,
+  path: string
+): Promise<{ error: string } | { path: string }> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return {
+      error:
+        "This site can't accept receipt screenshots yet — SUPABASE_SERVICE_ROLE_KEY " +
+        "is not set. Send your GCash reference number instead and the shop can check that.",
+    };
+  }
+
+  const client = createAdminClient();
+  const body = Buffer.from(await file.arrayBuffer());
+  const put = () =>
+    client.storage
+      .from(PRIVATE_BUCKET)
+      .upload(path, body, { contentType: file.type, upsert: true });
+
+  let { error } = await put();
+
+  /*
+   * The bucket is made here rather than by hand, on the one request that
+   * finds it missing.
+   *
+   * The public bucket is a step in the setup notes because somebody has to
+   * upload a logo into it anyway. Nobody ever opens this one — its first use
+   * is a customer paying at eleven at night — so a setup step that can be
+   * forgotten is a setup step that will be, and the symptom is a payment
+   * screenshot that would not upload. `public: false` is the whole reason
+   * this file exists, so it is stated here rather than left to a default.
+   */
+  if (error && /bucket.*not.*found/i.test(error.message)) {
+    await client.storage.createBucket(PRIVATE_BUCKET, { public: false });
+    ({ error } = await put());
+  }
+
+  if (error) return { error: `Upload failed: ${error.message}` };
+  return { path };
 }

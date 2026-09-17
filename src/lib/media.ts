@@ -1,4 +1,5 @@
 import { brand } from "../../config/index.ts";
+import { privateBucketOf } from "./receipts.ts";
 /**
  * What may be uploaded, and where it lands.
  *
@@ -17,6 +18,20 @@ import { brand } from "../../config/index.ts";
  * are sharing a storage quota and one of them deletes a file.
  */
 export const MEDIA_BUCKET = brand.key;
+
+/**
+ * The second bucket, and nothing in it is served without a signed link.
+ *
+ * A customer's GCash screenshot carries their name, their number, the amount
+ * and a reference. It has no business sitting beside the product photographs
+ * in a bucket whose whole job is to be readable by anyone — and a public
+ * bucket does not fail at serving a private file, it succeeds at it.
+ *
+ * Derived from the public one rather than typed, for the same reason that one
+ * is derived from the config key: a hardcoded name meant a second deployment
+ * wrote into the first shop's bucket.
+ */
+export const PRIVATE_BUCKET = privateBucketOf(brand.key);
 
 /** Kept apart from the menu photos so a tidy-up of one never catches the other. */
 export const MEDIA_PREFIX = "announcements";

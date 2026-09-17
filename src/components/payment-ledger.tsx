@@ -48,7 +48,16 @@ export type LedgerRow = {
   payment_status: PaymentStatus;
   payment_plan: PaymentPlan;
   payment_reference: string | null;
+  /**
+   * A signed link, minted for this page load, or null.
+   *
+   * Not the column: that holds a path into a private bucket now. The page
+   * swaps it before this component ever sees it, so there is exactly one
+   * place that knows how to turn a stored receipt into something a browser
+   * can open.
+   */
   payment_receipt_url: string | null;
+  payment_receipt_path?: string | null;
   downpayment_amount: number;
   downpayment_confirmed_at: string | null;
 };
