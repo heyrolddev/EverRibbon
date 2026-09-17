@@ -3,6 +3,7 @@ import { isFulfilled } from "@/lib/order-statuses";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { parseSpec } from "@/lib/spec";
 import { signReceipts } from "@/lib/receipts-server";
+import { signReferences } from "@/lib/references-server";
 import { lineName } from "@/lib/order-lines";
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
@@ -35,7 +36,7 @@ import {
 export const BOARD_LIMIT = 200;
 
 const COLUMNS =
-  "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, cancelled_by, cancelled_at, eta_set_at, contact_name, contact_phone, notes, customer_id, delivery_address, delivery_lat, delivery_lng, delivery_distance_km, delivery_fee, payment_method, payment_status, payment_reference, payment_receipt_url, payment_receipt_path, scheduled_for, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(id, qty, price_at_sale, label, spec, products(name, categories)), order_proofs(id, version, image_url, note, sent_at, decision, reply, decided_at)";
+  "id, ticket, created_at, status, fulfillment, revenue, eta_minutes, cancelled_reason, cancelled_by, cancelled_at, eta_set_at, contact_name, contact_phone, notes, customer_id, delivery_address, delivery_lat, delivery_lng, delivery_distance_km, delivery_fee, payment_method, payment_status, payment_reference, payment_receipt_url, payment_receipt_path, reference_paths, scheduled_for, payment_plan, downpayment_amount, downpayment_confirmed_at, order_lines(id, qty, price_at_sale, label, spec, products(name, categories)), order_proofs(id, version, image_url, note, sent_at, decision, reply, decided_at)";
 
 type OrderRow = {
   id: string;
@@ -62,6 +63,7 @@ type OrderRow = {
   payment_reference: string | null;
   payment_receipt_url: string | null;
   payment_receipt_path: string | null;
+  reference_paths: string[] | null;
   eta_set_at: string | null;
   scheduled_for: string | null;
   payment_plan: string;
@@ -126,7 +128,13 @@ async function hydrate(rows: OrderRow[]): Promise<AdminOrder[]> {
   // One round trip for the whole page. Signed per request rather than stored,
   // because a link that lives as long as the row is a public URL with extra
   // steps.
-  const links = await signReceipts(rows);
+  const [links, references] = await Promise.all([
+    signReceipts(rows),
+    // What they sent as an example of what they want. Signed the same way
+    // and for the same reason: a reference is usually a photograph of a
+    // person at a graduation.
+    signReferences(rows),
+  ]);
 
   return rows.map((o) => {
     const p = o.customer_id ? profiles.get(o.customer_id) : undefined;
@@ -162,6 +170,7 @@ async function hydrate(rows: OrderRow[]): Promise<AdminOrder[]> {
       // A short signed link, or nothing. The column holds a path into a
       // private bucket now, which is not something a browser can open.
       payment_receipt_url: links.get(String(o.id)) ?? null,
+      references: references.get(String(o.id)) ?? [],
       payment_plan: (o.payment_plan === "downpayment" ? "downpayment" : "full") as PaymentPlan,
       downpayment_amount: Number(o.downpayment_amount ?? 0),
       downpayment_confirmed_at: o.downpayment_confirmed_at,

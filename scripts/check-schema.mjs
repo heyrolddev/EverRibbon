@@ -265,6 +265,45 @@ const behaviours = [
     );
   }, "receipts/ord_test/x.jpg|url empty",
    "A receipt written back to the public column is the bug this migration exists to fix."],
+
+  ["an enquiry starts with no photographs rather than with null", () => {
+    // The column is read as an array on every order card. A null default
+    // would make "no photographs" and "a column nobody has written" two
+    // different shapes to handle, forever.
+    return scalar("select coalesce(array_length(reference_paths, 1), 0)::text from orders where id = 'ord_test'");
+  }, "0",
+   "Every reader would need a null branch for a state that means nothing."],
+
+  ["a script cannot attach four hundred photographs to an order", () => {
+    // The enquiry form is open to anyone on the internet and writes with the
+    // service-role client, which is exactly where "the browser only ever
+    // sends three" stops being true.
+    try {
+      psql(["-c",
+        "update orders set reference_paths = (select array_agg('references/x/' || g || '.jpg') " +
+        "from generate_series(1, 400) g) where id = 'ord_test'"]);
+      return "accepted";
+    } catch { return "refused"; }
+  }, "refused",
+   "An open form plus a service-role write is where a browser-side cap stops being one."],
+
+  ["a blank path is refused", () => {
+    // An empty string is a path to the bucket root. It signs successfully
+    // and returns a link to nothing.
+    try {
+      psql(["-c", "update orders set reference_paths = ARRAY['references/x/a.jpg', ''] where id = 'ord_test'"]);
+      return "accepted";
+    } catch { return "refused"; }
+  }, "refused",
+   "It signs successfully and links to nothing, which renders as a photo the shop lost."],
+
+  ["three photographs are ordinary", () => {
+    psql(["-c",
+      "update orders set reference_paths = ARRAY['references/x/a.jpg','references/x/b.jpg','references/x/c.jpg'] " +
+      "where id = 'ord_test'"]);
+    return scalar("select array_length(reference_paths, 1)::text from orders where id = 'ord_test'");
+  }, "3",
+   "The cap must stop a script without stopping a customer."],
 ];
 
 let failed = 0;

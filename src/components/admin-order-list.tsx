@@ -8,6 +8,7 @@ import { alertEtaElapsed } from "@/app/admin/orders/actions";
 import { OrderStatusPicker } from "@/components/order-status-picker";
 import { ProofSender } from "@/components/proof-sender";
 import { SpecTweak } from "@/components/spec-tweak";
+import { ReferenceStrip } from "@/components/reference-strip";
 import { SpecQuestionsProvider, useSpecQuestions } from "@/components/spec-questions-provider";
 import type { SpecAnswer, SpecQuestion } from "@/lib/spec";
 import type { Proof } from "@/lib/proofs";
@@ -61,6 +62,8 @@ export type AdminOrder = {
   payment_status: PaymentStatus;
   payment_reference: string | null;
   payment_receipt_url: string | null;
+  /** Signed links to what the customer sent as an example. Empty is ordinary. */
+  references: string[];
   eta_set_at: string | null;
   payment_plan: PaymentPlan;
   downpayment_amount: number;
@@ -247,6 +250,10 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
           </li>
         ))}
       </ul>
+
+      {/* What they sent, above the price: it is usually the clearest thing
+          on the card about what is actually wanted. */}
+      <ReferenceStrip links={o.references} className="mt-4" />
 
       {/*
         An enquiry with no price on it.

@@ -9,6 +9,13 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getOrderStatuses } from "@/lib/order-statuses-server";
 import { getSpecQuestions } from "@/lib/spec-server";
 import { answersFrom, missingRequired, questionsFor, specJson } from "@/lib/spec";
+import { checkMedia } from "@/lib/media";
+import { uploadPrivate } from "@/lib/storage";
+import {
+  MAX_REFERENCES,
+  MAX_REFERENCE_BYTES,
+  referencePath,
+} from "@/lib/references";
 import { notifyEnquiry } from "@/lib/notify";
 import { shopToday } from "@/lib/format";
 
@@ -41,6 +48,14 @@ export type EnquiryDraft = {
   categories: string[];
   /** Answers as typed, keyed by question. */
   spec: Record<string, string>;
+  /**
+   * What they sent as an example, already shrunk by the browser.
+   *
+   * Files in the request rather than an upload endpoint of their own: an
+   * anonymous door that accepts photographs is a door, and this one is
+   * already rate-limited, size-checked and attached to something.
+   */
+  photos?: File[];
 };
 
 export type EnquiryResult =
@@ -163,6 +178,31 @@ export async function sendEnquiry(draft: EnquiryDraft): Promise<EnquiryResult> {
 
   if (error || !order) {
     return { ok: false, error: error?.message ?? "That didn't send. Please ring the shop." };
+  }
+
+  /*
+   * The photographs, into the private bucket under the order they belong to.
+   *
+   * After the order exists, so the path can carry its id — and the failure
+   * that leaves behind is an enquiry with one photo fewer, which somebody can
+   * see and ask about. Doing it first would risk an enquiry that never
+   * arrived because a photo would not upload.
+   *
+   * Anything that fails is dropped rather than failing the enquiry. Getting
+   * the words without the picture is a worse enquiry; getting neither is no
+   * enquiry at all.
+   */
+  const photos = (draft.photos ?? []).slice(0, MAX_REFERENCES);
+  const stored: string[] = [];
+  for (const photo of photos) {
+    const checked = checkMedia(photo.type, photo.size);
+    if (!checked.ok || checked.kind !== "image") continue;
+    if (photo.size > MAX_REFERENCE_BYTES) continue;
+    const put = await uploadPrivate(photo, referencePath(String(order.id), checked.ext));
+    if ("path" in put) stored.push(put.path);
+  }
+  if (stored.length > 0) {
+    await admin.from("orders").update({ reference_paths: stored }).eq("id", order.id);
   }
 
   const { error: lineError } = await admin.from("order_lines").insert({

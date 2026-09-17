@@ -19,6 +19,7 @@ import {
   type SpecQuestion,
 } from "@/lib/spec";
 import { SpecFields } from "@/components/spec-fields";
+import { ReferenceStrip } from "@/components/reference-strip";
 import { saveQuote } from "@/app/admin/quotes/actions";
 
 /**
@@ -62,6 +63,8 @@ export type Preset = {
 export type Existing = {
   id: string;
   ticket: number | null;
+  /** Signed links to what they sent as an example of what they want. */
+  references: string[];
   contactName: string;
   contactPhone: string;
   notes: string;
@@ -312,6 +315,10 @@ export function QuoteDesk({
         {/* ------------------------------------------------------- the job -- */}
         <section className="rounded-2xl bg-paper-100 p-5 ring-1 ring-ink-950/10">
           <h3 className="font-display text-lg font-black text-ink-950">What they want</h3>
+
+          {/* Before the fields, because on a job that came in as a photograph
+              this is what the fields are describing. */}
+          {existing && <ReferenceStrip links={existing.references} className="mt-3" />}
 
           <div className="mt-4 flex flex-col gap-4">
             {rows.map((row, i) => {

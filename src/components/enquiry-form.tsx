@@ -5,6 +5,7 @@ import Link from "next/link";
 import { brand } from "../../config/index.ts";
 import { SpecFields } from "@/components/spec-fields";
 import { missingRequired, questionsFor, scopedCategories, type SpecQuestion } from "@/lib/spec";
+import { ReferencePicker, type Reference } from "@/components/reference-picker";
 import { sendEnquiry } from "@/app/enquire/actions";
 
 /**
@@ -44,6 +45,7 @@ export function EnquiryForm({
   const [needBy, setNeedBy] = useState("");
   const [kind, setKind] = useState("");
   const [spec, setSpec] = useState<Record<string, string>>({});
+  const [photos, setPhotos] = useState<Reference[]>([]);
   /*
    * Whether they have tried to send yet.
    *
@@ -78,6 +80,10 @@ export function EnquiryForm({
       needBy,
       categories: kind ? [kind] : [],
       spec,
+      // The shrunk files, sent in the same request. No separate upload
+      // endpoint: an anonymous door that accepts photographs is a door, and
+      // this form already has one that is rate-limited and checked.
+      photos: photos.map((p) => p.file),
     });
     setSending(false);
     if (res.ok) setSent({ ticket: res.ticket });
@@ -128,6 +134,8 @@ export function EnquiryForm({
             className={field}
           />
         </label>
+
+        <ReferencePicker photos={photos} onChange={setPhotos} />
 
         <div className="mt-4 grid gap-4 sm:grid-cols-[6rem_minmax(0,1fr)]">
           <label className="flex flex-col gap-1.5">

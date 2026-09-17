@@ -106,6 +106,8 @@ is used instead, so sharing works before anything has been bought.
 Migration 0021 moved payment screenshots into a second, private bucket —
 `everribbon-private`, made automatically the first time one is uploaded. From
 now on nothing serves a receipt without a signed link that lasts ten minutes.
+The reference photos customers attach to an enquiry (0022) live there too,
+for the same reason: one is usually a photograph of a person at a graduation.
 
 **The ones already uploaded are still in the public bucket**, under
 `everribbon/receipts/`, and still readable by anyone with the address. The

@@ -5,6 +5,7 @@ import { getOperating, capacityRange } from "@/lib/operating-server";
 import { loadCostBook } from "@/lib/costing-server";
 import { QuoteDesk, type Existing, type Preset } from "@/components/quote-desk";
 import { getSpecQuestions } from "@/lib/spec-server";
+import { signReferences } from "@/lib/references-server";
 import { categoriesForAnswers, parseSpec, valuesOf } from "@/lib/spec";
 import { hqTitle } from "@/lib/hq-theme";
 import { addDays, shopToday } from "@/lib/format";
@@ -107,14 +108,19 @@ export default async function AdminQuotesPage({
     const { data } = await supabase
       .from("orders")
       .select(
-        "id, ticket, contact_name, contact_phone, notes, scheduled_for, delivery_fee, uplift_kind, uplift_percent, order_lines(id, product_id, label, qty, price_at_sale, labour_minutes, unit_cost, spec, products(categories))"
+        "id, ticket, contact_name, contact_phone, notes, scheduled_for, delivery_fee, uplift_kind, uplift_percent, reference_paths, order_lines(id, product_id, label, qty, price_at_sale, labour_minutes, unit_cost, spec, products(categories))"
       )
       .eq("id", openOrderId)
       .maybeSingle();
 
     if (data) {
+      // What they sent as an example. The person putting a price on this is
+      // exactly who needs to see it — the photograph is usually clearer about
+      // what is wanted than the sentence beside it.
+      const refs = await signReferences([data as { id: string; reference_paths?: unknown }]);
       existing = {
         id: String(data.id),
+        references: refs.get(String(data.id)) ?? [],
         ticket: data.ticket === null ? null : Number(data.ticket),
         contactName: String(data.contact_name ?? ""),
         contactPhone: String(data.contact_phone ?? ""),
