@@ -10,9 +10,11 @@ import { Stars } from "@/components/stars";
 import { LOW_STOCK_SERVINGS } from "@/lib/costing";
 import {
   categoriesUsed,
+  categoryOf,
   colourOf,
   inCategory,
   orderForMenu,
+  type CategoryTone,
   type MenuCategory,
 } from "@/lib/categories";
 
@@ -41,10 +43,13 @@ function MealCard({
   product,
   index,
   staff,
+  tone,
 }: {
   product: Product;
   index: number;
   staff: boolean;
+  /** Its category's colour, for the card that has no photograph yet. */
+  tone: CategoryTone;
 }) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
@@ -118,11 +123,21 @@ function MealCard({
             className="object-cover transition-transform duration-500 group-hover:scale-110"
           />
         ) : (
-          // A product with no photo yet. Quiet rather than the old saturated
-          // gradient: it's a gap, not a feature, and seventy-three of them
-          // was a wall of orange with the actual food nowhere in it.
-          <span className="absolute inset-0 grid place-items-center bg-paper-100 font-display text-5xl font-black text-ink-950/15">
-            {initialOf(product.name)}
+          /*
+            A product with no photo yet, in its category's colour.
+
+            This was deliberately quiet — one saturated gradient across
+            seventy-three cards was a wall of orange with the food nowhere in
+            it. That reasoning held while the tint was decoration. It is a
+            category now, and six colours across a menu is the filter bar
+            repeated on every card: the eye finds the sashes without reading
+            a word. The letter stays faint, because the name is directly
+            below it and a placeholder should not shout it twice.
+          */
+          <span
+            className={`absolute inset-0 grid place-items-center font-display text-5xl font-black ${tone.wash} opacity-90`}
+          >
+            <span className="opacity-30">{initialOf(product.name)}</span>
           </span>
         )}
       </div>
@@ -338,7 +353,13 @@ export function MenuList({
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
           <AnimatePresence mode="popLayout">
             {filtered.map((product, i) => (
-              <MealCard key={product.id} product={product} index={i} staff={staff} />
+              <MealCard
+                key={product.id}
+                product={product}
+                index={i}
+                staff={staff}
+                tone={colourOf(categoryOf(product.categories), colours)}
+              />
             ))}
           </AnimatePresence>
         </ul>

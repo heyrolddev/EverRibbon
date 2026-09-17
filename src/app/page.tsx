@@ -13,6 +13,7 @@ import { getSchedule } from "@/lib/hours-server";
 import { getLiveAnnouncements } from "@/lib/announcements-server";
 import { stripItems } from "@/lib/announcements";
 import { DAY_NAMES, type DayHours } from "@/lib/hours";
+import { categoryOf, colourOf } from "@/lib/categories";
 
 import { Logo } from "@/components/logo";
 import { Marquee } from "@/components/marquee";
@@ -56,6 +57,8 @@ type Preview = {
   price: number;
   description: string | null;
   image_url: string | null;
+  /** What it is, which decides what colour it is drawn in. */
+  categories: string[] | null;
 };
 
 /**
@@ -71,7 +74,7 @@ async function preview(): Promise<Preview[]> {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("products")
-      .select("id, name, price, description, image_url")
+      .select("id, name, price, description, image_url, categories")
       .eq("is_public", true)
       .eq("is_available", true)
       .order("name")
@@ -82,6 +85,27 @@ async function preview(): Promise<Preview[]> {
     // A storefront that will not render because one query failed is worse
     // than a storefront with one section missing.
     return [];
+  }
+}
+
+/**
+ * What colour each category is painted in.
+ *
+ * The shop chooses these, and the same answer has to come back on the
+ * homepage, the menu, the till and the costing screen — a category that is
+ * green on one and black on another is worse than no colour at all.
+ */
+async function categoryColours(): Promise<Map<string, string>> {
+  if (!isConfigured()) return new Map();
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.from("catalog_categories").select("name, colour");
+    return new Map(
+      ((data ?? []) as { name: string; colour: string }[]).map((c) => [c.name, c.colour])
+    );
+  } catch {
+    // No colours is a working page: `colourOf` falls back on its own.
+    return new Map();
   }
 }
 
@@ -142,10 +166,11 @@ function hourLines(hours: DayHours[]): { days: string; time: string }[] {
 }
 
 export default async function Home() {
-  const [statuses, products, reviewSummary, schedule, live, faqRows] =
+  const [statuses, products, colours, reviewSummary, schedule, live, faqRows] =
     await Promise.all([
       getOrderStatuses(),
       preview(),
+      categoryColours(),
       getPublicReviews(9),
       getSchedule(),
       getLiveAnnouncements(),
@@ -180,6 +205,26 @@ export default async function Home() {
         <div
           aria-hidden
           className="hero-grid pointer-events-none absolute inset-0 opacity-20"
+        />
+        {/*
+          Two lights, and they are not the same colour.
+
+          A single gold glow on black is what every gold brand does, and it
+          reads flat because nothing is casting a shadow. The second one is
+          the accent — plum, chosen to sit as far from the gold as the palette
+          allows — thrown from the opposite corner at a third of the strength.
+          Too faint to name as pink, strong enough that the black has depth.
+        */}
+        <div
+          aria-hidden
+          // Sized against the viewport, not fixed. At a phone's width a
+          // 42rem glow is not a glow, it is the background — and the brand is
+          // a gold mark on black, not a gold page.
+          className="pointer-events-none absolute -right-24 -top-32 h-[22rem] w-[22rem] rounded-full bg-brand-600/20 blur-[90px] sm:-right-32 sm:-top-40 sm:h-[42rem] sm:w-[42rem] sm:blur-[120px]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-40 -left-28 h-[20rem] w-[20rem] rounded-full bg-accent-700/20 blur-[90px] sm:-bottom-52 sm:-left-40 sm:h-[38rem] sm:w-[38rem] sm:blur-[130px]"
         />
 
         <div className="relative mx-auto grid w-full max-w-7xl items-center gap-y-12 px-6 py-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-x-16 lg:py-24">
@@ -298,45 +343,63 @@ export default async function Home() {
 
         {products.length > 0 ? (
           <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((p, i) => (
-              <Reveal key={p.id} delay={i * 0.06}>
-                <Link
-                  href="/menu"
-                  className="group flex h-full flex-col overflow-hidden rounded-3xl bg-paper-100 ring-1 ring-ink-950/10 transition-shadow hover:shadow-lg"
-                >
-                  {p.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.image_url}
-                      alt={p.name}
-                      className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  ) : (
-                    // No photograph yet. A tinted panel with the name set in
-                    // the shop's own face reads as a choice; a grey box with a
-                    // broken-image icon reads as neglect.
-                    <div className="grid aspect-[4/3] w-full place-items-center bg-ink-950/90 px-6">
-                      <span className="text-center font-display text-2xl text-paper-100/80">
-                        {p.name}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex flex-1 flex-col gap-1.5 p-5">
-                    <h3 className="font-display text-lg font-black text-ink-950">
-                      {p.name}
-                    </h3>
-                    {p.description && (
-                      <p className="line-clamp-2 text-sm text-ink-900/65">
-                        {p.description}
-                      </p>
+            {products.map((p, i) => {
+              const category = categoryOf(p.categories);
+              const tone = colourOf(category, colours);
+              return (
+                <Reveal key={p.id} delay={i * 0.06}>
+                  <Link
+                    href="/menu"
+                    className="group flex h-full flex-col overflow-hidden rounded-3xl bg-paper-50 ring-1 ring-ink-950/10 transition-shadow hover:shadow-lg"
+                  >
+                    {p.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.image_url}
+                        alt={p.name}
+                        className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      /*
+                        No photograph yet, painted in its category's colour.
+                        Six of these used to be six identical black panels,
+                        which reads as a shop that has not started — the same
+                        six in six colours reads as a range. The shop this was
+                        built for has thirty-four products and no photographs,
+                        so this is the state it is actually in.
+                      */
+                      <div
+                        className={`grid aspect-[4/3] w-full place-items-center px-6 ${tone.wash}`}
+                      >
+                        <span className="text-center font-display text-2xl font-black">
+                          {p.name}
+                        </span>
+                      </div>
                     )}
-                    <p className="mt-auto pt-3 font-mono text-sm font-bold text-brand-700">
-                      {p.price > 0 ? money(p.price) : "Priced per order"}
-                    </p>
-                  </div>
-                </Link>
-              </Reveal>
-            ))}
+                    <div className="flex flex-1 flex-col gap-1.5 p-5">
+                      {/* What it is, in its own colour. The eye learns where
+                          the sashes are and stops reading the words. */}
+                      <span
+                        className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${tone.chip}`}
+                      >
+                        {category}
+                      </span>
+                      <h3 className="mt-1 font-display text-lg font-black text-ink-950">
+                        {p.name}
+                      </h3>
+                      {p.description && (
+                        <p className="line-clamp-2 text-sm text-ink-900/65">
+                          {p.description}
+                        </p>
+                      )}
+                      <p className="mt-auto pt-3 font-mono text-sm font-bold text-brand-700">
+                        {p.price > 0 ? money(p.price) : "Priced per order"}
+                      </p>
+                    </div>
+                  </Link>
+                </Reveal>
+              );
+            })}
           </div>
         ) : (
           <Reveal>
@@ -387,8 +450,24 @@ export default async function Home() {
       </section>
 
       {/* -------------------------------------------------- how it works -- */}
+      {/*
+        A band, not a section that happens to follow one.
+
+        This carried `bg-paper-100`, which IS the page background — so the
+        step that explains how buying works had no edges at all and read as
+        more of the catalogue. Paper-50 lifts it, and the gold hairline is the
+        only rule on the page: it marks the one place a visitor is being told
+        something rather than shown something.
+      */}
       {hasProcess && (
-      <section id="how" className="bg-paper-100 py-28 sm:py-40">
+      <section
+        id="how"
+        className="relative overflow-hidden border-y border-brand-600/25 bg-paper-50 py-28 sm:py-40"
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-20 -top-20 h-[26rem] w-[26rem] rounded-full bg-brand-400/10 blur-3xl"
+        />
         <div className="mx-auto max-w-6xl px-6">
           <Reveal>
             <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-brand-700">

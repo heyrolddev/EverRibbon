@@ -24,67 +24,136 @@
  */
 
 export type CategoryTone = {
-  /** What the owner calls it when choosing. */
+  /**
+   * What the owner picks from.
+   *
+   * A handle, not a promise: the swatch beside it is the truth, because the
+   * actual hue is the brand's and changes with the brand. The names used to
+   * be a food shop's — "Red", "Yellow", "Brown" — and on a gold brand "Red"
+   * painted dark gold and "Yellow" painted the same dark gold.
+   */
   label: string;
   /** Filled chip — the selected filter, and the badge on a card. */
   chip: string;
   /** The same colour, quietly — an unselected filter or a label on a card. */
   soft: string;
+  /**
+   * A panel-sized tint, for a card with no photograph on it yet.
+   *
+   * Stronger than `soft` on purpose. A 16-pixel chip and a 300-pixel panel
+   * are not the same alpha: at 12% a chip is a colour and a panel is a shade
+   * of the paper it sits on, which is how six categories came out as six
+   * slightly different greys.
+   */
+  wash: string;
   /** Just the colour, for a dot or a rail. */
   dot: string;
+  /**
+   * The palette keys behind `chip` and `wash`.
+   *
+   * Named separately because Tailwind compiles class names by reading the
+   * source, so the classes above have to be literal strings — and a literal
+   * string is not something a test can measure. These are what the contrast
+   * test reads.
+   */
+  tokens: {
+    fill: string;
+    on: string;
+    wash: string;
+    /** As a fraction, matching the `/NN` modifier on the class. */
+    washAlpha: number;
+    washOn: string;
+  };
 };
 
+/**
+ * One tone per ramp in the brand's own palette.
+ *
+ * They used to be eight hand-named colours, and on this brand four of them
+ * collided: "Red" and "Yellow" were both `brand-800`, "Black" and "Brown"
+ * were both `ink-950`. Worse, the shop's own catalogue seed had coloured its
+ * six categories `brand, accent, ok, warn, ink, paper` — four of which were
+ * not keys here at all, so four categories fell back to black and the menu
+ * came out a wall of identical chips.
+ *
+ * Keyed by ramp instead. That makes them exactly as distinct as the palette
+ * is, which the palette test already holds to ΔE 20 apart — so every shop
+ * that installs this gets six genuinely different colours in its own brand
+ * without anybody choosing them.
+ *
+ * `bad` is deliberately not offered. Using the danger ramp for decoration is
+ * the "amber warning on a gold brand" mistake pointing the other way: it
+ * spends the one colour that has to mean something is wrong.
+ */
 export const CATEGORY_TONES: Record<string, CategoryTone> = {
   brand: {
-    label: "Red",
+    label: "Brand colour",
     chip: "bg-brand-800 text-paper-50",
-    soft: "bg-brand-800/10 text-brand-900",
-    dot: "bg-brand-800",
+    soft: "bg-brand-800/12 text-brand-900",
+    wash: "bg-brand-400/30 text-brand-900",
+    // Mid-ramp for the dot: the 800 is nearly black at 16 pixels across, and
+    // a swatch nobody can tell from the next one is not a swatch.
+    dot: "bg-brand-500",
+    tokens: { fill: "brand-800", on: "paper-50", wash: "brand-400", washAlpha: 0.3, washOn: "brand-900" },
   },
-  chili: {
-    label: "Orange",
-    chip: "bg-warn-500 text-paper-50",
-    soft: "bg-warn-500/12 text-warn-700",
-    dot: "bg-warn-500",
+  accent: {
+    label: "Accent",
+    chip: "bg-accent-800 text-paper-50",
+    soft: "bg-accent-800/12 text-accent-900",
+    wash: "bg-accent-300/35 text-accent-900",
+    dot: "bg-accent-500",
+    tokens: { fill: "accent-800", on: "paper-50", wash: "accent-300", washAlpha: 0.35, washOn: "accent-900" },
   },
-  gold: {
-    // Gold is the one that cannot take cream text — it's a light colour, and
-    // the chip needs ink on it or the label vanishes.
-    label: "Yellow",
-    chip: "bg-brand-800 text-paper-50",
-    soft: "bg-accent-200/25 text-ink-950",
-    dot: "bg-accent-200",
-  },
-  jade: {
+  ok: {
     label: "Green",
-    chip: "bg-ok-600 text-paper-50",
-    soft: "bg-ok-600/12 text-ok-800",
+    chip: "bg-ok-700 text-paper-50",
+    soft: "bg-ok-700/12 text-ok-800",
+    wash: "bg-ok-400/40 text-ok-900",
     dot: "bg-ok-600",
+    tokens: { fill: "ok-700", on: "paper-50", wash: "ok-400", washAlpha: 0.4, washOn: "ok-900" },
   },
-  teal: {
-    label: "Teal",
-    chip: "bg-ok-800 text-paper-50",
-    soft: "bg-ok-800/12 text-ok-900",
-    dot: "bg-ok-800",
+  warn: {
+    label: "Orange",
+    chip: "bg-warn-700 text-paper-50",
+    soft: "bg-warn-700/12 text-warn-800",
+    wash: "bg-warn-300/40 text-warn-900",
+    dot: "bg-warn-500",
+    tokens: { fill: "warn-700", on: "paper-50", wash: "warn-300", washAlpha: 0.4, washOn: "warn-900" },
   },
   ink: {
     label: "Black",
     chip: "bg-ink-950 text-paper-50",
     soft: "bg-ink-950/8 text-ink-950",
+    wash: "bg-ink-300/45 text-ink-950",
     dot: "bg-ink-950",
+    tokens: { fill: "ink-950", on: "paper-50", wash: "ink-300", washAlpha: 0.45, washOn: "ink-950" },
   },
-  brown: {
-    label: "Brown",
-    chip: "bg-ink-950 text-paper-50",
-    soft: "bg-ink-950/12 text-ink-950",
-    dot: "bg-ink-950",
-  },
-  sand: {
+  paper: {
+    // The one light fill, which is why it takes ink on top rather than cream.
     label: "Sand",
     chip: "bg-paper-300 text-ink-950",
-    soft: "bg-paper-200 text-ink-950",
-    dot: "bg-paper-300",
+    soft: "bg-paper-300/45 text-ink-950",
+    wash: "bg-paper-300/65 text-ink-950",
+    dot: "bg-paper-400",
+    tokens: { fill: "paper-300", on: "ink-950", wash: "paper-300", washAlpha: 0.65, washOn: "ink-950" },
   },
+};
+
+/**
+ * What the colours used to be called, pointed at what they are now.
+ *
+ * A category coloured `chili` two years ago must not turn black because the
+ * list was rewritten. Aliases rather than a migration: the stored value is
+ * the owner's, and rewriting somebody's data to suit a refactor is how a
+ * template earns a reputation.
+ */
+const TONE_ALIASES: Record<string, string> = {
+  chili: "warn",
+  gold: "brand",
+  jade: "ok",
+  teal: "ok",
+  brown: "ink",
+  sand: "paper",
 };
 
 export const CATEGORY_COLOURS = Object.keys(CATEGORY_TONES);
@@ -95,7 +164,8 @@ const DEFAULT_CATEGORY_TONE = "ink";
 const FALLBACK_TONE: CategoryTone = CATEGORY_TONES[DEFAULT_CATEGORY_TONE]!;
 
 export function toneFor(colour: string | null | undefined): CategoryTone {
-  return CATEGORY_TONES[colour ?? ""] ?? FALLBACK_TONE;
+  const key = colour ?? "";
+  return CATEGORY_TONES[key] ?? CATEGORY_TONES[TONE_ALIASES[key] ?? ""] ?? FALLBACK_TONE;
 }
 
 export type MenuCategory = { name: string; colour: string; sort_order: number };

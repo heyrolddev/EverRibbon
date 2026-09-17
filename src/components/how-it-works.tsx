@@ -1,4 +1,4 @@
-import { processSteps, type OrderStatusRow } from "@/lib/order-statuses";
+import { processSteps, toneClasses, type OrderStatusRow } from "@/lib/order-statuses";
 
 /**
  * How ordering here actually goes, drawn from the shop's own steps.
@@ -28,22 +28,32 @@ export function HowItWorks({ statuses }: { statuses: OrderStatusRow[] }) {
     // in a three-column block leave a sixth cell showing the divider colour,
     // which reads as a step whose text failed to load.
     <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {steps.map((step, i) => (
-        <li
-          key={step.key}
-          className="flex flex-col gap-2 rounded-2xl bg-paper-50 p-6 ring-1 ring-ink-950/10"
-        >
-          <span className="font-mono text-xs font-bold tracking-widest text-brand-700">
-            {String(i + 1).padStart(2, "0")}
-          </span>
-          <h3 className="font-display text-xl font-black text-ink-950">
-            {step.label}
-          </h3>
-          <p className="text-sm leading-relaxed text-ink-900/70">
-            {step.customerNote}
-          </p>
-        </li>
-      ))}
+      {steps.map((step, i) => {
+        // Each step in the colour its own row carries — the same colour the
+        // order board paints it, and the same one the customer will see
+        // against their order once they have placed it. The shop set these
+        // in HQ, so the homepage learns the palette of its own process
+        // rather than being given a decorative one.
+        const tone = toneClasses(step.tone);
+        return (
+          <li
+            key={step.key}
+            className={`flex flex-col gap-2 rounded-2xl border-l-4 bg-paper-100 p-6 ring-1 ring-ink-950/[0.07] ${tone.rail}`}
+          >
+            <span
+              className={`grid h-8 w-8 place-items-center rounded-full font-mono text-xs font-black ${tone.chip}`}
+            >
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <h3 className="mt-1 font-display text-xl font-black text-ink-950">
+              {step.label}
+            </h3>
+            <p className="text-sm leading-relaxed text-ink-900/70">
+              {step.customerNote}
+            </p>
+          </li>
+        );
+      })}
     </ol>
   );
 }

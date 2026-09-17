@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { BRANDS } from "../config/index.ts";
+import { contrast } from "./contrast.ts";
+import { blend } from "./blend.ts";
 import {
+  CATEGORY_TONES,
+  toneFor,
   categoriesUsed,
   cleanCategories,
   countByCategory,
@@ -280,4 +286,121 @@ test("the pills and the grid read the same list", () => {
   const pills = categoriesUsed(MENU, known);
   assert.deepEqual(pills.slice(0, 4), ["Mains", "Ji Pai", "Solo", "Burger"]);
   assert.equal(namesOf(orderForMenu(MENU, pills))[0], "Black Pepper Noodles");
+});
+
+/* ------------------------------------------------------------- the tones -- */
+
+test("every category colour is a colour, and a different one", () => {
+  /*
+   * The bug this replaces: the tones were eight hand-named colours from a
+   * food shop, and on a gold brand "Red" and "Yellow" were both `brand-800`
+   * while "Black" and "Brown" were both `ink-950`. Half the list painted the
+   * same two chips.
+   *
+   * Keyed by ramp, they are exactly as distinct as the palette — which the
+   * palette test already holds to ΔE 20 at the 600 step. So this asserts the
+   * thing that made them collide: no two tones fill with the same value.
+   */
+  const fills = Object.values(CATEGORY_TONES).map((t) => t.tokens.fill);
+  assert.equal(new Set(fills).size, fills.length);
+  const dots = Object.values(CATEGORY_TONES).map((t) => t.dot);
+  assert.equal(new Set(dots).size, dots.length);
+});
+
+test("a category chip can be read on every brand", () => {
+  // The chip is a filled block with a label on it. Nothing else in this file
+  // decides that pairing, so nothing else can check it.
+  for (const [key, brand] of Object.entries(BRANDS)) {
+    for (const [name, tone] of Object.entries(CATEGORY_TONES)) {
+      const fill = brand.palette[tone.tokens.fill as keyof typeof brand.palette];
+      const on = brand.palette[tone.tokens.on as keyof typeof brand.palette];
+      assert.ok(fill, `${key}: ${name} fills with ${tone.tokens.fill}, which is not in the palette`);
+      assert.ok(on, `${key}: ${name} writes in ${tone.tokens.on}, which is not in the palette`);
+      const r = contrast(on!, fill!);
+      assert.ok(r >= 4.5, `${key}: the "${name}" chip is ${r.toFixed(2)}:1, needs 4.5:1`);
+    }
+  }
+});
+
+test("a panel tinted with a category colour can still be read on it", () => {
+  /*
+   * The wash is a big area of colour with a product name on it, and it is
+   * the one pairing in this file that is not a flat fill — the class is an
+   * alpha over the card, so the colour the text actually sits on has to be
+   * blended before it can be measured.
+   *
+   * Checked on every brand, because the alpha was chosen against this one's
+   * cream and a darker paper would swallow it.
+   */
+  for (const [key, brand] of Object.entries(BRANDS)) {
+    const card = brand.palette["paper-50"];
+    for (const [name, tone] of Object.entries(CATEGORY_TONES)) {
+      const tint = brand.palette[tone.tokens.wash as keyof typeof brand.palette];
+      const text = brand.palette[tone.tokens.washOn as keyof typeof brand.palette];
+      assert.ok(tint, `${key}: ${name} washes with ${tone.tokens.wash}, not in the palette`);
+      const blended = blend(tint!, tone.tokens.washAlpha, card!);
+      const r = contrast(text!, blended);
+      assert.ok(r >= 4.5, `${key}: the "${name}" panel reads ${r.toFixed(2)}:1, needs 4.5:1`);
+      // And it has to look like a colour rather than like the card it is on.
+      // At 12% — the alpha the chips use — six categories came out as six
+      // slightly different greys, which is the bug this separate step exists
+      // for.
+      assert.ok(
+        contrast(blended, card!) >= 1.15,
+        `${key}: the "${name}" panel is indistinguishable from the card behind it`
+      );
+    }
+  }
+});
+
+test("the danger colour is not offered as decoration", () => {
+  // Spending the one ramp that has to mean "something is wrong" on a
+  // category chip is the amber-warning-on-a-gold-brand mistake, pointing the
+  // other way.
+  assert.ok(!Object.values(CATEGORY_TONES).some((t) => t.tokens.fill.startsWith("bad-")));
+});
+
+test("a colour picked before the list was rewritten still paints", () => {
+  // Rewriting somebody's stored data to suit a refactor is how a template
+  // earns a reputation. The old names are aliases instead.
+  for (const [old, now] of [
+    ["chili", "warn"],
+    ["gold", "brand"],
+    ["jade", "ok"],
+    ["teal", "ok"],
+    ["brown", "ink"],
+    ["sand", "paper"],
+  ] as const) {
+    assert.equal(toneFor(old).tokens.fill, CATEGORY_TONES[now]!.tokens.fill, old);
+  }
+  // And anything genuinely unknown is still the quiet fallback rather than a
+  // crash or a blank chip.
+  assert.equal(toneFor("nonsense").tokens.fill, CATEGORY_TONES.ink!.tokens.fill);
+  assert.equal(toneFor(null).tokens.fill, CATEGORY_TONES.ink!.tokens.fill);
+});
+
+test("the catalogue seed colours every category with a colour that exists", () => {
+  /*
+   * This is the bug, as it actually shipped: the seed coloured its six
+   * categories `brand, accent, ok, warn, ink, paper`, and four of those were
+   * not keys in the tone list at all. They fell back to black, so five of the
+   * six categories on the live menu were the same chip — and nothing
+   * anywhere reported it, because a fallback is not an error.
+   */
+  const sql = readFileSync(
+    new URL("../supabase/seeds/everribbon-catalogue.sql", import.meta.url),
+    "utf8"
+  );
+  const block = sql.slice(sql.indexOf("INSERT INTO public.catalog_categories"));
+  const rows = [...block.slice(0, block.indexOf(";")).matchAll(/'([^']+)',\s*'([^']+)'/g)];
+  assert.ok(rows.length >= 4, "found no categories in the seed to check");
+
+  for (const [, name, colour] of rows) {
+    assert.ok(
+      colour && CATEGORY_TONES[colour],
+      `the seed colours "${name}" with "${colour}", which is not a tone — it would paint as the fallback`
+    );
+  }
+  // And they are not all the same one, which is the outcome that was shipped.
+  assert.ok(new Set(rows.map((r) => r[2])).size > 1);
 });
