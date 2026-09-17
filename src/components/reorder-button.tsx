@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useCart } from "@/lib/cart-context";
+import { ASK_PATH, quoteFirst } from "@/lib/ordering";
 import { reorder } from "@/app/orders/reorder";
 
 /**
@@ -14,6 +16,31 @@ import { reorder } from "@/app/orders/reorder";
  * they'd notice was wrong.
  */
 export function ReorderButton({ orderId }: { orderId: string }) {
+  /*
+   * Where there is no cart, this cannot fill one.
+   *
+   * It used to add the items and push to /cart — which now redirects, so the
+   * button emptied its own work into a page that was not there any more. A
+   * link to the form, carrying the order, is what "the same again" means when
+   * every job is quoted: last time's answers come back with it, and the one
+   * thing that actually changes — whose name goes on it — is a single field.
+   */
+  if (quoteFirst()) {
+    return (
+      <Link
+        href={{ pathname: ASK_PATH, query: { from: orderId } }}
+        className="inline-block rounded-full bg-brand-700 px-5 py-2 text-sm font-bold text-paper-50 transition-transform hover:scale-105"
+      >
+        Order this again →
+      </Link>
+    );
+  }
+
+  return <CartReorder orderId={orderId} />;
+}
+
+/** The cart version, for a shop that sells what is already on the shelf. */
+function CartReorder({ orderId }: { orderId: string }) {
   const { items: cartItems, clear, addItem } = useCart();
   const router = useRouter();
   const [busy, setBusy] = useState(false);

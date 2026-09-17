@@ -28,6 +28,11 @@ export default function robots(): MetadataRoute.Robots {
           "/admin",       // the whole of HQ — sales, costs, staff
           "/account",
           "/orders",
+          // Somebody's order, reachable by a link they were sent. The page
+          // says noindex too — this is the half a crawler reads before it
+          // fetches the page, which is the half that matters for a URL that
+          // gets pasted into a chat.
+          "/track",
           "/cart",
           "/checkout",
           "/login",

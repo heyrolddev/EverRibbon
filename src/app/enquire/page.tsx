@@ -5,6 +5,7 @@ import { EnquiryForm } from "@/components/enquiry-form";
 import { getSpecQuestions } from "@/lib/spec-server";
 import { createClient } from "@/lib/supabase/server";
 import { isConfigured } from "@/lib/auth";
+import { categoriesForAnswers, parseSpec, valuesOf } from "@/lib/spec";
 import { shopToday } from "@/lib/format";
 import { siteUrl } from "@/lib/site";
 
@@ -34,10 +35,13 @@ export const revalidate = 60;
 export default async function EnquirePage({
   searchParams,
 }: {
-  /** `?product=…` — what they tapped on the catalogue. */
-  searchParams: Promise<{ product?: string }>;
+  /**
+   * `?product=…` — what they tapped on the catalogue.
+   * `?from=…`    — an order of their own they want again.
+   */
+  searchParams: Promise<{ product?: string; from?: string }>;
 }) {
-  const { product: productId } = await searchParams;
+  const { product: productId, from: repeatOf } = await searchParams;
   const questions = await getSpecQuestions();
 
   /*
@@ -95,6 +99,55 @@ export default async function EnquirePage({
     }
   }
 
+  /*
+   * The same again.
+   *
+   * A regular ordering a second bouquet is ordering last year's bouquet with
+   * a different name on it, so the answers come back with the words — and the
+   * one thing that actually changes is a single field they can edit.
+   *
+   * Scoped to their own order by `customer_id`. RLS says the same, but being
+   * explicit means a mistake here fails closed rather than handing somebody
+   * a stranger's spec.
+   */
+  let again: { wants: string; spec: Record<string, string>; categories: string[] } | null = null;
+  if (repeatOf && !picked && isConfigured()) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("orders")
+          .select("notes, order_lines(label, spec, products(name, categories))")
+          .eq("id", repeatOf)
+          .eq("customer_id", user.id)
+          .maybeSingle();
+
+        const line = (data?.order_lines ?? [])[0];
+        if (line) {
+          const joined = (Array.isArray(line.products) ? line.products[0] : line.products) as
+            | { name?: unknown; categories?: unknown }
+            | null
+            | undefined;
+          const answers = parseSpec(line.spec);
+          again = {
+            // Their own words first: the notes are what they actually wrote.
+            wants: String(data?.notes ?? "").trim() ||
+              String(joined?.name ?? line.label ?? "").trim(),
+            spec: valuesOf(answers),
+            categories: Array.isArray(joined?.categories)
+              ? joined.categories.map(String)
+              : categoriesForAnswers(questions, answers),
+          };
+        }
+      }
+    } catch {
+      // A blank form is a working form.
+    }
+  }
+
   return (
     <main className="flex-1">
       <PageHeader
@@ -109,6 +162,7 @@ export default async function EnquirePage({
           today={shopToday()}
           defaults={defaults}
           picked={picked}
+          again={again}
         />
       </section>
     </main>

@@ -57,6 +57,7 @@ export function EnquiryForm({
   today,
   defaults,
   picked,
+  again,
 }: {
   questions: SpecQuestion[];
   /** The shop's today, so the date picker cannot offer yesterday. */
@@ -65,17 +66,21 @@ export function EnquiryForm({
   defaults: { name: string; phone: string };
   /** What they tapped on the catalogue, when they came from there. */
   picked?: { name: string; from: number; categories: string[] } | null;
+  /** An order of their own they asked to repeat, answers and all. */
+  again?: { wants: string; spec: Record<string, string>; categories: string[] } | null;
 }) {
   const [name, setName] = useState(defaults.name);
   const [phone, setPhone] = useState(defaults.phone);
-  const [wants, setWants] = useState(picked?.name ?? "");
+  const [wants, setWants] = useState(again?.wants ?? picked?.name ?? "");
   const [qty, setQty] = useState(1);
   const [needBy, setNeedBy] = useState("");
   // The kind of work comes with the product they tapped, so the right
   // questions are already on screen rather than behind a dropdown nobody
   // knows to open.
-  const [kind, setKind] = useState(picked?.categories[0] ?? "");
-  const [spec, setSpec] = useState<Record<string, string>>({});
+  const [kind, setKind] = useState(again?.categories[0] ?? picked?.categories[0] ?? "");
+  // Last time's answers, so "the same again" means the same again — and the
+  // one thing that changes is a field they edit rather than a form they refill.
+  const [spec, setSpec] = useState<Record<string, string>>(again?.spec ?? {});
   const [photos, setPhotos] = useState<Reference[]>([]);
   /*
    * Whether they have tried to send yet.
