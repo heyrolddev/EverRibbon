@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   answerFor,
   answersFrom,
+  categoriesForAnswers,
   hasSpec,
   humanise,
   missingRequired,
@@ -13,6 +14,7 @@ import {
   specJson,
   specLines,
   specSummary,
+  valuesOf,
   type SpecQuestion,
 } from "../src/lib/spec.ts";
 
@@ -233,4 +235,45 @@ test("a typed label becomes a key a JSON reader can hold", () => {
 test("a key with no label is still readable", () => {
   assert.equal(humanise("name_on_ribbon"), "Name on ribbon");
   assert.equal(humanise(""), "");
+});
+
+/* --------------------------------------------------- back from the answers -- */
+
+test("the kind of work is reconstructed from the answers given", () => {
+  // A line stores its answers and not its scope, so an enquiry reopened to be
+  // priced has to work backwards — or it drops every category-scoped answer
+  // the customer already gave.
+  const asked = [
+    q({ id: 1, key: "name", category: null }),
+    q({ id: 2, key: "stems", category: "EverCraft" }),
+    q({ id: 3, key: "width", category: "Ribbon Prints" }),
+  ];
+  const answers = parseSpec({
+    answers: [
+      { key: "name", label: "Name", value: "Krizzia" },
+      { key: "stems", label: "Stems", value: "12" },
+    ],
+  });
+  assert.deepEqual(categoriesForAnswers(asked, answers), ["EverCraft"]);
+  // Answers to questions asked of every job say nothing about the kind.
+  assert.deepEqual(
+    categoriesForAnswers(asked, parseSpec({ answers: [{ key: "name", label: "N", value: "x" }] })),
+    []
+  );
+});
+
+test("answers go back into a form the way they came out of one", () => {
+  const answers = parseSpec({
+    answers: [
+      { key: "stems", label: "Stems", value: "12" },
+      { key: "name", label: "Name", value: "Krizzia" },
+    ],
+  });
+  assert.deepEqual(valuesOf(answers), { stems: "12", name: "Krizzia" });
+  // And back again, unchanged, which is what makes re-quoting lossless.
+  const asked = [
+    q({ id: 1, key: "stems", label: "Stems" }),
+    q({ id: 2, key: "name", label: "Name" }),
+  ];
+  assert.deepEqual(answersFrom(asked, valuesOf(answers)), answers);
 });

@@ -49,6 +49,16 @@ export function SiteFooter({
                 {brand.copy.catalogue}
               </Link>
             </li>
+            {/* A shop that makes to order is asked for things that are not in
+                its catalogue, which makes this the second link rather than a
+                footnote. A shop selling off a shelf has nothing to ask for. */}
+            {brand.fulfillment === "made_to_order" && (
+              <li>
+                <Link href="/enquire" className="hover:text-accent-300">
+                  Ask for a price
+                </Link>
+              </li>
+            )}
             <li>
               <Link href="/news" className="hover:text-accent-300">
                 News &amp; promos

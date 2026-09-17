@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { formatDateTimeFull, money } from "@/lib/format";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -246,6 +247,24 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
           </li>
         ))}
       </ul>
+
+      {/*
+        An enquiry with no price on it.
+
+        The one thing standing between "somebody asked" and an order, and the
+        only action on this card that is not available anywhere else. Asked of
+        the money rather than of the status name — a shop that calls its first
+        step something else still gets the link, and an order that has been
+        priced does not get it back.
+      */}
+      {o.revenue <= 0 && isOpen(statuses, o.status) && (
+        <Link
+          href={{ pathname: "/admin/quotes", query: { order: o.id } }}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-brand-700 px-4 py-2.5 text-xs font-bold text-paper-50 transition-transform hover:scale-[1.02]"
+        >
+          Put a price on this →
+        </Link>
+      )}
 
       {/* After the items, not before them: the photograph being sent is a
           photograph OF those items, and whoever is about to take it needs the

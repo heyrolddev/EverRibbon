@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/site";
 import { getPublicFeed } from "@/lib/announcements-server";
+import { brand } from "../../config/index.ts";
 
 /**
  * Every page worth finding, and how recently it changed.
@@ -34,6 +35,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${url}/reviews`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${url}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];
+
+  // A shop that makes to order is found by people searching for something
+  // that does not exist yet, so the page where they can ask for it belongs
+  // beside the catalogue rather than below the news. A shop that sells off a
+  // shelf has no such page and does not list one.
+  if (brand.fulfillment === "made_to_order") {
+    core.splice(2, 0, {
+      url: `${url}/enquire`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.9,
+    });
+  }
 
   // A post that can't be read is a dead entry in the sitemap, and a sitemap
   // full of those is treated as a low-quality signal. The feed already filters

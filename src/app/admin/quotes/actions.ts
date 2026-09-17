@@ -26,6 +26,16 @@ import { addDays, shopToday } from "@/lib/format";
  */
 
 export type QuoteDraft = {
+  /**
+   * The enquiry being priced, when this is a price for something already on
+   * the board rather than a new job typed from scratch.
+   *
+   * The same record all the way through — an enquiry, a quote and a delivered
+   * order are one row at different moments. Making a second row here is how
+   * the thing the customer asked for and the thing being made start to
+   * differ, and how the board ends up showing both.
+   */
+  orderId?: string | null;
   contactName: string;
   contactPhone: string;
   notes: string;
@@ -70,6 +80,71 @@ type Result = { ok: true; id: string; ticket: number } | { ok: false; error: str
 
 /** The status a quote is saved in, if the shop has one by that name. */
 const QUOTED = "quoted";
+
+/**
+ * Put a price on an order that already exists.
+ *
+ * Refused once any money has moved. Up to that point a quote is an offer and
+ * rewriting it is ordinary; after a deposit it is what the shop agreed to
+ * take, and quietly rewriting it would change what a customer owes on an
+ * order they have already paid into.
+ */
+async function repriceOrder(
+  orderId: string,
+  fields: Record<string, unknown>
+): Promise<
+  | { ok: true; order: { id: string; ticket: number | null } }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+
+  const { data: existing, error } = await supabase
+    .from("orders")
+    .select("id, ticket, status, payment_status, order_statuses(is_open, is_cancellation)")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!existing) return { ok: false, error: "That order is gone." };
+
+  const step = existing.order_statuses as unknown as
+    | { is_open: boolean; is_cancellation: boolean }
+    | null;
+  // Asked of the step's own meaning, never of its name: a shop that calls its
+  // last step something else would otherwise have every finished order
+  // quotable again.
+  if (step && (!step.is_open || step.is_cancellation)) {
+    return { ok: false, error: "That order is finished or cancelled — it can't be re-quoted." };
+  }
+  if (existing.payment_status !== "unpaid") {
+    return {
+      ok: false,
+      error:
+        "They have already paid something on this. Changing the price now would change what they owe on an order they have paid into — take it up with them first.",
+    };
+  }
+
+  const { data, error: updateError } = await supabase
+    .from("orders")
+    .update(fields)
+    .eq("id", orderId)
+    // Only while it is still unpaid. Between the check above and this line a
+    // deposit can land, and this is what makes that a no-op rather than a
+    // repriced order somebody has already paid into.
+    .eq("payment_status", "unpaid")
+    .select("id, ticket")
+    .maybeSingle();
+
+  if (updateError) return { ok: false, error: updateError.message };
+  if (!data) {
+    return { ok: false, error: "A payment landed on this while you were pricing it. Reload and look." };
+  }
+
+  return {
+    ok: true,
+    order: { id: String(data.id), ticket: data.ticket === null ? null : Number(data.ticket) },
+  };
+}
 
 export async function saveQuote(draft: QuoteDraft): Promise<Result> {
   const viewer = await getViewer();
@@ -166,10 +241,16 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
 
   const today = shopToday();
 
-  const { data: order, error } = await supabase
-    .from("orders")
-    .insert({
-      date: today,
+  /*
+   * Everything a quote decides, whether it is being written or rewritten.
+   *
+   * The status moves to "quoted" either way — including backwards, from a
+   * step the order had already reached. That is the point rather than a side
+   * effect: a price that changed is a price the customer has not agreed to
+   * yet, and an order sitting at "agreed" under a number nobody agreed to is
+   * the worst of the two states to be in.
+   */
+  const quoteFields = {
       status,
       fulfillment: draft.deliveryFee > 0 ? "delivery" : "pickup",
       contact_name: draft.contactName || null,
@@ -190,13 +271,27 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
       uplift_kind: draft.upliftKind,
       uplift_percent: draft.upliftPercent,
       eta_minutes: Math.round(priced.minutes),
-    })
-    .select("id, ticket")
-    .single();
+  };
+
+  const reprice = draft.orderId ? await repriceOrder(draft.orderId, quoteFields) : null;
+  if (reprice && !reprice.ok) return reprice;
+
+  const { data: order, error } = reprice
+    ? { data: reprice.order, error: null }
+    : await supabase
+        .from("orders")
+        .insert({ date: today, ...quoteFields })
+        .select("id, ticket")
+        .single();
 
   if (error || !order) {
     return { ok: false, error: error?.message ?? "The quote could not be saved." };
   }
+
+  // A repriced order keeps its id and loses its old lines. Replacing rather
+  // than patching, because a quote is a whole answer: an item dropped from
+  // the second version has to actually leave.
+  if (reprice) await supabase.from("order_lines").delete().eq("order_id", order.id);
 
   const { error: lineError } = await supabase.from("order_lines").insert(
     priced.lines.map((l, i) => ({
@@ -220,9 +315,16 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
 
   if (lineError) {
     // A quote with a header and no items is worse than no quote: it shows on
-    // the board as work with nothing in it. Take the header back out.
-    await supabase.from("orders").delete().eq("id", order.id);
-    return { ok: false, error: lineError.message };
+    // the board as work with nothing in it. Take a NEW header back out — a
+    // repriced one is somebody's enquiry, and deleting it because the second
+    // version failed to save would lose the first.
+    if (!reprice) await supabase.from("orders").delete().eq("id", order.id);
+    return {
+      ok: false,
+      error: reprice
+        ? `${lineError.message} — the enquiry is still there, with no items on it. Try again.`
+        : lineError.message,
+    };
   }
 
   revalidatePath("/admin/orders");

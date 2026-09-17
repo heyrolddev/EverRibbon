@@ -51,6 +51,36 @@ export type Preset = {
   categories: string[];
 };
 
+/**
+ * An order already on the board, being priced.
+ *
+ * An enquiry and a delivered order are the same row at different moments, so
+ * pricing one is an edit rather than a new record — and the desk needs to
+ * open holding everything the customer already told the shop, including the
+ * answers to its own questions.
+ */
+export type Existing = {
+  id: string;
+  ticket: number | null;
+  contactName: string;
+  contactPhone: string;
+  notes: string;
+  dueDate: string;
+  deliveryFee: number;
+  upliftKind: Uplift;
+  upliftPercent: number;
+  lines: {
+    label: string;
+    qty: number;
+    minutesEach: number;
+    materialsEach: number;
+    priceEach: number | null;
+    productId: string | null;
+    categories: string[];
+    spec: Record<string, string>;
+  }[];
+};
+
 type Row = QuoteLine & {
   key: number;
   /** The catalogue row a preset came from, so the server can price it itself. */
@@ -94,23 +124,42 @@ export function QuoteDesk({
   days,
   presets,
   questions,
+  existing,
   today,
 }: {
   operating: Operating;
   days: CapacityDay[];
   presets: Preset[];
   questions: SpecQuestion[];
+  /** An enquiry being priced, or null for a job typed from scratch. */
+  existing?: Existing | null;
   today: string;
 }) {
-  const [rows, setRows] = useState<Row[]>([blank()]);
-  const [uplift, setUplift] = useState<Uplift>("margin");
-  const [percent, setPercent] = useState(60);
-  const [due, setDue] = useState("");
-  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [rows, setRows] = useState<Row[]>(() =>
+    existing && existing.lines.length > 0
+      ? existing.lines.map((l) => ({
+          ...blank(),
+          ...l,
+          // The catalogue price and its ladder are not carried over: they are
+          // whatever the shop publishes today, and the desk looks them up by
+          // product. A stale one copied from an enquiry would quote last
+          // month's price with this month's confidence.
+          listPrice: presets.find((p) => p.id === l.productId)?.price ?? null,
+          breaks: presets.find((p) => p.id === l.productId)?.breaks ?? [],
+        }))
+      : [blank()]
+  );
+  const [uplift, setUplift] = useState<Uplift>(existing?.upliftKind ?? "margin");
+  const [percent, setPercent] = useState(existing?.upliftPercent ?? 60);
+  const [due, setDue] = useState(existing?.dueDate ?? "");
+  const [deliveryFee, setDeliveryFee] = useState(existing?.deliveryFee ?? 0);
   const [discount, setDiscount] = useState(0);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [notes, setNotes] = useState("");
+  const [name, setName] = useState(existing?.contactName ?? "");
+  const [phone, setPhone] = useState(existing?.contactPhone ?? "");
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+  // Nothing is marked missing until somebody tries to save. A blank new line
+  // outlined in red is an error the person has not made yet.
+  const [tried, setTried] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ id: string; ticket: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -203,9 +252,23 @@ export function QuoteDesk({
   };
 
   const onSave = async () => {
+    setTried(true);
+    if (shortfall.size > 0) {
+      // A disabled button with a red box somewhere below it is a puzzle. Say
+      // what is missing, in the words the shop wrote.
+      const names = rows
+        .filter((r) => shortfall.has(r.key))
+        .map((r) => `"${r.label.trim() || "an untitled line"}"`)
+        .join(", ");
+      return setError(`${names} still needs an answer to a required question.`);
+    }
     setSaving(true);
     setError(null);
     const res = await saveQuote({
+      // The enquiry this is a price FOR, when there is one. One record from
+      // "someone asked" to "handed over", so nothing has to be copied across
+      // at the moment the customer says yes.
+      orderId: existing?.id ?? null,
       contactName: name.trim(),
       contactPhone: phone.trim(),
       notes: notes.trim(),
@@ -238,7 +301,10 @@ export function QuoteDesk({
     else setError(res.error);
   };
 
-  const usable = rows.some((r) => r.label.trim() && r.qty > 0) && shortfall.size === 0;
+  // The button stays live even with a required answer missing: pressing it is
+  // how somebody finds out which one, and a button that is simply dead
+  // explains nothing.
+  const usable = rows.some((r) => r.label.trim() && r.qty > 0);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -418,7 +484,7 @@ export function QuoteDesk({
                       <SpecFields
                         questions={asksFor(row)}
                         values={row.spec}
-                        missing={shortfall.get(row.key) ?? []}
+                        missing={tried ? (shortfall.get(row.key) ?? []) : []}
                         onChange={(field, value) => answer(row.key, field, value)}
                       />
                     </div>
@@ -617,8 +683,8 @@ export function QuoteDesk({
         <section className="rounded-2xl bg-paper-100 p-5 ring-1 ring-ink-950/10">
           {saved ? (
             <p className="text-sm text-ok-700">
-              Saved as quote #{saved.ticket}. It stands until{" "}
-              {formatDate(addDays(today, QUOTE_VALID_DAYS))}.
+              {existing ? "Priced" : "Saved"} as quote #{saved.ticket}. It stands
+              until {formatDate(addDays(today, QUOTE_VALID_DAYS))}.
             </p>
           ) : (
             <>
@@ -627,11 +693,16 @@ export function QuoteDesk({
                 disabled={saving || !usable}
                 className="w-full rounded-full bg-brand-700 px-5 py-3 text-sm font-bold text-paper-50 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {saving ? "Saving…" : "Save this quote"}
+                {saving
+                  ? "Saving…"
+                  : existing
+                    ? `Send this price to #${existing.ticket ?? "them"}`
+                    : "Save this quote"}
               </button>
               <p className="mt-2 text-center text-xs text-ink-900/55">
-                Saved as a quote, not an order. Nothing is booked and no stock
-                moves until they agree to it.
+                {existing
+                  ? "Their enquiry keeps its place on the board — this puts a price on it. Nothing is booked until they agree."
+                  : "Saved as a quote, not an order. Nothing is booked and no stock moves until they agree to it."}
               </p>
               {error && <p className="mt-2 text-sm text-bad-700">{error}</p>}
             </>

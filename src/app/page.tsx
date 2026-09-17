@@ -211,12 +211,29 @@ export default async function Home() {
               >
                 See the {catalogue.toLowerCase()}
               </Link>
-              <a
-                href={`tel:${brand.contact.phoneHref}`}
-                className="rounded-full px-7 py-4 text-sm font-bold text-paper-100 ring-1 ring-paper-100/25 transition-colors hover:bg-paper-100/10"
-              >
-                {madeToOrder ? "Ask about a custom order" : "Call us"}
-              </a>
+              {/*
+                A link to the form, not a `tel:`, for a shop that makes to
+                order. People plan a graduation at eleven at night, and a
+                phone number at that hour is a decision to put off until
+                morning — which is a decision most of them never come back to.
+                A shop selling off a shelf has nothing to ask about, so it
+                still gets the phone.
+              */}
+              {madeToOrder ? (
+                <Link
+                  href="/enquire"
+                  className="rounded-full px-7 py-4 text-sm font-bold text-paper-100 ring-1 ring-paper-100/25 transition-colors hover:bg-paper-100/10"
+                >
+                  Ask about a custom order
+                </Link>
+              ) : (
+                <a
+                  href={`tel:${brand.contact.phoneHref}`}
+                  className="rounded-full px-7 py-4 text-sm font-bold text-paper-100 ring-1 ring-paper-100/25 transition-colors hover:bg-paper-100/10"
+                >
+                  Call us
+                </a>
+              )}
             </div>
           </div>
 
@@ -341,12 +358,29 @@ export default async function Home() {
                   </>
                 )}
               </p>
-              <a
-                href={`tel:${brand.contact.phoneHref}`}
-                className="rounded-full bg-[var(--accent-fill)] px-6 py-3 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
-              >
-                {brand.contact.phone}
-              </a>
+              <div className="flex flex-wrap gap-3">
+                {/* The conversation the sentence above promises, in writing.
+                    A shop with nothing photographed yet is exactly the shop
+                    whose enquiries arrive after hours. */}
+                {madeToOrder && (
+                  <Link
+                    href="/enquire"
+                    className="rounded-full bg-[var(--accent-fill)] px-6 py-3 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
+                  >
+                    Tell us what you need
+                  </Link>
+                )}
+                <a
+                  href={`tel:${brand.contact.phoneHref}`}
+                  className={
+                    madeToOrder
+                      ? "rounded-full px-5 py-3 text-sm font-bold text-ink-950 ring-1 ring-ink-950/20 transition-colors hover:bg-ink-950/5"
+                      : "rounded-full bg-[var(--accent-fill)] px-6 py-3 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
+                  }
+                >
+                  {brand.contact.phone}
+                </a>
+              </div>
             </div>
           </Reveal>
         )}
@@ -428,12 +462,29 @@ export default async function Home() {
             )}
 
             <div className="mt-7 flex flex-wrap gap-3">
-              <a
-                href={`tel:${brand.contact.phoneHref}`}
-                className="rounded-full bg-[var(--accent-fill)] px-6 py-3 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
-              >
-                {brand.contact.phone}
-              </a>
+              <div className="flex flex-wrap gap-3">
+                {/* The conversation the sentence above promises, in writing.
+                    A shop with nothing photographed yet is exactly the shop
+                    whose enquiries arrive after hours. */}
+                {madeToOrder && (
+                  <Link
+                    href="/enquire"
+                    className="rounded-full bg-[var(--accent-fill)] px-6 py-3 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
+                  >
+                    Tell us what you need
+                  </Link>
+                )}
+                <a
+                  href={`tel:${brand.contact.phoneHref}`}
+                  className={
+                    madeToOrder
+                      ? "rounded-full px-5 py-3 text-sm font-bold text-ink-950 ring-1 ring-ink-950/20 transition-colors hover:bg-ink-950/5"
+                      : "rounded-full bg-[var(--accent-fill)] px-6 py-3 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
+                  }
+                >
+                  {brand.contact.phone}
+                </a>
+              </div>
               {/* The shop's listing when it has one, a search for its own
                   address when it does not. What is never drawn is a link
                   built on a coordinate nobody measured. */}

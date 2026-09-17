@@ -199,6 +199,36 @@ export function questionsFor(
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
 }
 
+/**
+ * Which kinds of work a set of answers must have been asked about.
+ *
+ * The line does not store what it was: only the answers, and those carry the
+ * question's wording rather than its scope. So when an enquiry is reopened to
+ * be priced, this works backwards — any category whose questions include one
+ * that was actually answered.
+ *
+ * It is a reconstruction and it is allowed to be. Getting it wrong offers a
+ * couple of extra questions on a form; not doing it at all drops every
+ * category-scoped answer the customer already gave.
+ */
+export function categoriesForAnswers(
+  questions: SpecQuestion[],
+  answers: SpecAnswer[]
+): string[] {
+  const given = new Set(answers.map((a) => a.key));
+  return [
+    ...new Set(
+      questions
+        .filter((q) => q.category !== null && given.has(q.key))
+        .map((q) => q.category as string)
+    ),
+  ].sort();
+}
+
+/** Answers as the form holds them, keyed by question. */
+export const valuesOf = (answers: SpecAnswer[]): Record<string, string> =>
+  Object.fromEntries(answers.map((a) => [a.key, a.value]));
+
 /** Every category any question is scoped to, for the editor's dropdown. */
 export const scopedCategories = (questions: SpecQuestion[]): string[] =>
   [...new Set(questions.map((q) => q.category).filter((c): c is string => Boolean(c)))].sort();

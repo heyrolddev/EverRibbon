@@ -290,3 +290,45 @@ export async function notifyNewOrder(orderId: string): Promise<void> {
     // missed ping; a thrown one would be a lost sale.
   }
 }
+
+/**
+ * Tell the shop somebody asked for something.
+ *
+ * Its own notification rather than `notifyNewOrder`, because an enquiry is
+ * not an order and that one would announce it as "New order · ₱0 · Pickup" —
+ * three facts, all of them wrong, on the phone of somebody deciding whether
+ * to get up. What matters here is who asked and what for; the money does not
+ * exist yet and saying zero is worse than saying nothing.
+ */
+export async function notifyEnquiry(orderId: string): Promise<void> {
+  if (!pushConfigured()) return;
+
+  try {
+    const db = createAdminClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("id, ticket, contact_name, notes, scheduled_for")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (!order) return;
+
+    const who = (order.contact_name ?? "").trim() || "Someone";
+    const wants = (order.notes ?? "").trim().replace(/\s+/g, " ");
+    // A date is the part that decides whether this waits until morning.
+    const when = order.scheduled_for
+      ? ` · needs it ${String(order.scheduled_for).slice(0, 10)}`
+      : "";
+
+    await pushToStaff({
+      title: `New enquiry · ${who}`,
+      body: `${wants.slice(0, 120)}${wants.length > 120 ? "…" : ""}${when}`,
+      url: "/admin/orders",
+      // Never collapsed together: two enquiries are two people waiting on a
+      // price, and one must not hide the other.
+      tag: `enquiry-${order.id}`,
+    });
+  } catch {
+    // The enquiry is saved either way. A missed ping costs a slower reply; a
+    // thrown one would cost the enquiry.
+  }
+}
