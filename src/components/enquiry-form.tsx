@@ -56,7 +56,7 @@ export function EnquiryForm({
   const [tried, setTried] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ ticket: number | null } | null>(null);
+  const [sent, setSent] = useState<{ ticket: number | null; token: string | null } | null>(null);
 
   const kinds = scopedCategories(questions);
   const asked = questionsFor(questions, kind ? [kind] : []);
@@ -86,7 +86,7 @@ export function EnquiryForm({
       photos: photos.map((p) => p.file),
     });
     setSending(false);
-    if (res.ok) setSent({ ticket: res.ticket });
+    if (res.ok) setSent({ ticket: res.ticket, token: res.token });
     else setError(res.error);
   };
 
@@ -101,6 +101,26 @@ export function EnquiryForm({
           a price and a date. Nothing is agreed and nothing is owed until you
           say yes to both.
         </p>
+        {/* Their own link, given now rather than left for the shop to send.
+            It is where the price will appear, so it is the one thing on this
+            screen worth keeping. */}
+        {sent.token && (
+          <Link
+            href={`/track/${sent.token}`}
+            className="mt-5 flex items-center justify-between gap-4 rounded-2xl bg-ink-950 px-5 py-4 text-paper-100 transition-transform hover:scale-[1.01]"
+          >
+            <span>
+              <span className="block text-[11px] font-bold uppercase tracking-widest text-brand-400">
+                Keep this
+              </span>
+              <span className="text-sm">
+                Your price and where it&apos;s up to will show here
+              </span>
+            </span>
+            <span aria-hidden className="text-lg">→</span>
+          </Link>
+        )}
+
         <div className="mt-6 flex flex-wrap gap-3">
           <a
             href={`tel:${brand.contact.phoneHref}`}

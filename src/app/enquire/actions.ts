@@ -59,7 +59,15 @@ export type EnquiryDraft = {
 };
 
 export type EnquiryResult =
-  | { ok: true; ticket: number | null }
+  /**
+   * The ticket to quote on the phone, and the link to come back to.
+   *
+   * Handed over immediately rather than left for the shop to send. The person
+   * who just filled the form is the person whose order it is, and a system
+   * that makes them wait for somebody to remember is a system where somebody
+   * eventually does not.
+   */
+  | { ok: true; ticket: number | null; token: string | null }
   | { ok: false; error: string };
 
 const MAX_WANTS = 1200;
@@ -173,7 +181,7 @@ export async function sendEnquiry(draft: EnquiryDraft): Promise<EnquiryResult> {
       // shop has not agreed to and the analytics would count.
       revenue: 0,
     })
-    .select("id, ticket")
+    .select("id, ticket, track_token")
     .single();
 
   if (error || !order) {
@@ -228,5 +236,11 @@ export async function sendEnquiry(draft: EnquiryDraft): Promise<EnquiryResult> {
   void notifyEnquiry(String(order.id));
 
   revalidatePath("/admin/orders");
-  return { ok: true, ticket: order.ticket === null ? null : Number(order.ticket) };
+  return {
+    ok: true,
+    ticket: order.ticket === null ? null : Number(order.ticket),
+    // Null on a database that has not run 0023 yet. The form says one
+    // sentence less rather than showing a link to nowhere.
+    token: order.track_token ? String(order.track_token) : null,
+  };
 }

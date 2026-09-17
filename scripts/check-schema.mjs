@@ -304,6 +304,58 @@ const behaviours = [
     return scalar("select array_length(reference_paths, 1)::text from orders where id = 'ord_test'");
   }, "3",
    "The cap must stop a script without stopping a customer."],
+
+  ["every order has a link, including the ones taken before there were links", () => {
+    // An order taken last month is exactly the one somebody rings about.
+    return scalar("select count(*) from orders where track_token is null or length(track_token) < 24");
+  }, "0",
+   "An order with no token is an order the shop cannot send anybody to."],
+
+  ["two orders never share a link", () => {
+    // The status is a foreign key and this file has already rewritten the
+    // step list by the time it gets here, so the first open step is asked
+    // for rather than named.
+    psql(["-c",
+      "insert into orders (id, date, status, revenue) " +
+      "select v.id, current_date, (select key from order_statuses order by sort_order limit 1), 0 " +
+      "from (values ('ord_link_a'), ('ord_link_b')) as v(id)"]);
+    return scalar(
+      "select count(*) - count(distinct track_token) from orders"
+    );
+  }, "0",
+   "One link showing two customers' orders is the failure this table cannot have."],
+
+  ["a link shows the order, and nothing the shop wouldn't read out", () => {
+    /*
+     * The function is the whole security boundary — RLS on `orders` is
+     * untouched. So what it returns is checked here rather than trusted to
+     * stay narrow: the cost of the job, the margin on it and the GCash
+     * reference must never appear because somebody added a column.
+     */
+    psql(["-c",
+      "update orders set cogs = 500, net_profit = 1200, payment_reference = 'GC123456', " +
+      "payment_receipt_path = 'receipts/x.jpg', contact_name = 'Krizzia', revenue = 1700 " +
+      "where id = 'ord_link_a'"]);
+    const token = scalar("select track_token from orders where id = 'ord_link_a'");
+    const doc = scalar(`select order_by_token('${token}')::text`);
+    const leaked = ["cogs", "net_profit", "GC123456", "receipts/x.jpg", "1200"].filter((k) =>
+      doc.includes(k)
+    );
+    return `${doc.includes("Krizzia") ? "shows" : "MISSING"}|${leaked.join(",") || "nothing leaked"}`;
+  }, "shows|nothing leaked",
+   "The link is the only door, so what it opens onto is a list, not a policy."],
+
+  ["a token nobody holds is nothing, not an empty order", () => {
+    return scalar("select coalesce(order_by_token('" + "f".repeat(32) + "')::text, 'null')");
+  }, "null",
+   "An empty order would tell somebody their job exists and has nothing in it."],
+
+  ["a short token cannot match by accident", () => {
+    // The guard is in the function as well as in the app, because the
+    // function is what anon may execute.
+    return scalar("select coalesce(order_by_token('')::text, 'null') || '|' || coalesce(order_by_token('abc')::text, 'null')");
+  }, "null|null",
+   "An empty string matching any row would hand out somebody's order."],
 ];
 
 let failed = 0;

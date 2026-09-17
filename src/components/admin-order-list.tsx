@@ -9,6 +9,7 @@ import { OrderStatusPicker } from "@/components/order-status-picker";
 import { ProofSender } from "@/components/proof-sender";
 import { SpecTweak } from "@/components/spec-tweak";
 import { ReferenceStrip } from "@/components/reference-strip";
+import { TrackLink } from "@/components/track-link";
 import { SpecQuestionsProvider, useSpecQuestions } from "@/components/spec-questions-provider";
 import type { SpecAnswer, SpecQuestion } from "@/lib/spec";
 import type { Proof } from "@/lib/proofs";
@@ -64,6 +65,8 @@ export type AdminOrder = {
   payment_receipt_url: string | null;
   /** Signed links to what the customer sent as an example. Empty is ordinary. */
   references: string[];
+  /** The handle in the /track link, for a customer with no account. */
+  track_token: string | null;
   eta_set_at: string | null;
   payment_plan: PaymentPlan;
   downpayment_amount: number;
@@ -250,6 +253,14 @@ function OrderCard({ order: o, statuses }: { order: AdminOrder; statuses: OrderS
           </li>
         ))}
       </ul>
+
+      {/* Most people who enquire have never signed in, so this is the only
+          way they find out what their job costs without being telephoned. */}
+      {o.track_token && (
+        <div className="mt-3">
+          <TrackLink token={o.track_token} name={o.contact_name} />
+        </div>
+      )}
 
       {/* What they sent, above the price: it is usually the clearest thing
           on the card about what is actually wanted. */}

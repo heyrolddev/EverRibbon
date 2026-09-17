@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { can, getViewer } from "@/lib/auth";
 import { getOperating } from "@/lib/operating-server";
 import { getSpecQuestions } from "@/lib/spec-server";
+import { notifyOrderStatus } from "@/lib/notify";
 import { answersFrom, missingRequired, questionsFor, specJson } from "@/lib/spec";
 import { quote, QUOTE_VALID_DAYS, type Uplift } from "@/lib/quote";
 import type { PriceBreak } from "@/lib/price-breaks";
@@ -325,6 +326,18 @@ export async function saveQuote(draft: QuoteDraft): Promise<Result> {
         ? `${lineError.message} — the enquiry is still there, with no items on it. Try again.`
         : lineError.message,
     };
+  }
+
+  if (reprice) {
+    // A price landing on somebody's enquiry is the one status change on this
+    // whole board they are actually waiting for. Only on a reprice: a quote
+    // typed from scratch has no customer attached to tell.
+    //
+    // Not awaited — the quote is saved, and a slow push must not be a slow
+    // save while somebody is on the phone.
+    void notifyOrderStatus(String(order.id));
+    revalidatePath(`/track/${draft.orderId}`);
+    revalidatePath("/orders");
   }
 
   revalidatePath("/admin/orders");
