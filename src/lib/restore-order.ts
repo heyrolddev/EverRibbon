@@ -82,6 +82,24 @@ export type BackupFile = {
  * JSON can be. Reading `app` is what stops an unrelated file being upserted
  * table by table until something happens to have a matching column name.
  */
+/**
+ * Whether this file was written by this shop's own HQ.
+ *
+ * It used to be one literal — the name of the shop this template was ported
+ * from. Meanwhile the writer stamps `brand.key`, so a backup taken today was
+ * refused by the restore screen that had just produced it: "that doesn't look
+ * like a <shop> backup (it says "<key>")". Nothing failed until
+ * somebody actually needed their data back, which is the worst possible
+ * moment to find out.
+ *
+ * The legacy identifier is still accepted, because files written by the
+ * older app are exactly the ones somebody is restoring FROM.
+ */
+const LEGACY_APP = "PepperPan"; // brand-literal-ok — a format stamp in files somebody is restoring FROM
+
+export const writtenByThisShop = (app: unknown): boolean =>
+  typeof app === "string" && (app === brand.key || app === LEGACY_APP);
+
 export function readBackup(text: string): BackupFile | { error: string } {
   let parsed: unknown;
   try {
@@ -93,7 +111,7 @@ export function readBackup(text: string): BackupFile | { error: string } {
     return { error: "That file is empty, or isn't a backup." };
   }
   const file = parsed as BackupFile;
-  if (file.app !== "PepperPan") {
+  if (!writtenByThisShop(file.app)) {
     return {
       error: `That doesn't look like a ${brand.name} backup${
         file.app ? ` (it says "${file.app}")` : ""

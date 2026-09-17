@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     if (!id) return new NextResponse("Not found", { status: 404 });
     const payload = await readSafetyNet(id);
     if (!payload) return new NextResponse("Not found", { status: 404 });
-    return file(payload, `pepperpan-safety-copy_${at}.json`, "application/json");
+    return file(payload, `${brand.key}-safety-copy_${at}.json`, "application/json");
   }
 
   if (kind === "full.json") {
@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
       .eq("id", 1);
     return file(
       snapshotToJson(snapshot),
-      `pepperpan-backup_${at}.json`,
+      `${brand.key}-backup_${at}.json`,
       "application/json"
     );
   }
@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
           o.notes,
         ])
       ),
-      `pepperpan-orders_${at}.csv`,
+      `${brand.key}-orders_${at}.csv`,
       "text/csv"
     );
   }
@@ -211,7 +211,7 @@ export async function GET(request: NextRequest) {
         ["Date", "Order ID", "Status", "Product", "Qty", "Price each", "Line total"],
         rows
       ),
-      `pepperpan-order-lines_${at}.csv`,
+      `${brand.key}-order-lines_${at}.csv`,
       "text/csv"
     );
   }
@@ -257,7 +257,7 @@ export async function GET(request: NextRequest) {
           ];
         })
       ),
-      `pepperpan-customers_${at}.csv`,
+      `${brand.key}-customers_${at}.csv`,
       "text/csv"
     );
   }
@@ -302,7 +302,7 @@ export async function GET(request: NextRequest) {
           ];
         })
       ),
-      `pepperpan-product-costs_${at}.csv`,
+      `${brand.key}-product-costs_${at}.csv`,
       "text/csv"
     );
   }
@@ -337,7 +337,7 @@ export async function GET(request: NextRequest) {
           (i.categories ?? []).join(" / "),
         ])
       ),
-      `pepperpan-inventory_${at}.csv`,
+      `${brand.key}-inventory_${at}.csv`,
       "text/csv"
     );
   }
@@ -391,7 +391,7 @@ export async function GET(request: NextRequest) {
         ["Makes", "Name", "Uses", "Type", "Qty", "Unit", "Cost per unit", "Line cost", "Problem"],
         rows
       ),
-      `pepperpan-recipes_${at}.csv`,
+      `${brand.key}-recipes_${at}.csv`,
       "text/csv"
     );
   }

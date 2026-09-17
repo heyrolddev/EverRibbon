@@ -15,7 +15,9 @@ type Msg = { id?: number; role: "user" | "assistant" | "staff"; content: string 
 /** How often an open chat asks for anything new. Closed chats never poll. */
 const POLL_MS = 4000;
 
-const GUEST_KEY = "pepperpan_chat_key";
+// From the config key, for the reason the cart's is: hardcoded, two shops
+// open on one phone shared a chat thread.
+const GUEST_KEY = `${brand.key}_chat_key`;
 
 // Mostly English, with one Taglish opener kept on purpose: it is the quickest
 // way to show a customer that asking in Filipino will work too.

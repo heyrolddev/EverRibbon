@@ -31,8 +31,44 @@ export const metadata: Metadata = {
 // questions is a form collecting answers nobody wanted.
 export const revalidate = 60;
 
-export default async function EnquirePage() {
+export default async function EnquirePage({
+  searchParams,
+}: {
+  /** `?product=…` — what they tapped on the catalogue. */
+  searchParams: Promise<{ product?: string }>;
+}) {
+  const { product: productId } = await searchParams;
   const questions = await getSpecQuestions();
+
+  /*
+   * What they tapped, if they got here from the catalogue.
+   *
+   * The form opens knowing it, which is the difference between "tell us what
+   * you'd like" and a blank box somebody has to describe their way out of.
+   * The price comes with it as a FROM, never as a total — the whole reason
+   * this page exists is that the real one depends on what they answer.
+   */
+  let picked: { name: string; from: number; categories: string[] } | null = null;
+  if (productId && isConfigured()) {
+    try {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("products")
+        .select("name, price, categories")
+        .eq("id", productId)
+        .eq("is_public", true)
+        .maybeSingle();
+      if (data) {
+        picked = {
+          name: String(data.name),
+          from: Number(data.price) || 0,
+          categories: Array.isArray(data.categories) ? data.categories.map(String) : [],
+        };
+      }
+    } catch {
+      // A blank form is a working form.
+    }
+  }
 
   // Signed in? Then their name and number are already known, and asking for
   // them again is how a form loses somebody at the last field.
@@ -68,7 +104,12 @@ export default async function EnquirePage() {
       />
 
       <section className="mx-auto max-w-2xl px-6 pb-24 pt-10 sm:pb-32">
-        <EnquiryForm questions={questions} today={shopToday()} defaults={defaults} />
+        <EnquiryForm
+          questions={questions}
+          today={shopToday()}
+          defaults={defaults}
+          picked={picked}
+        />
       </section>
     </main>
   );

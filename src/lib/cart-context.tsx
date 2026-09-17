@@ -1,4 +1,5 @@
 "use client";
+import { brand } from "../../config/index.ts";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
@@ -15,7 +16,15 @@ type CartContextValue = {
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
-const STORAGE_KEY = "pepperpan_cart";
+/*
+ * Named from the config key, not typed.
+ *
+ * It was one shop's name, hardcoded — so two shops open on one phone shared
+ * a basket, and the second one inherited the first one's products. The same
+ * mistake the bucket name already had, in the one place where the symptom is
+ * somebody else's order.
+ */
+const STORAGE_KEY = `${brand.key}_cart`;
 
 export function CartProvider({
   children,

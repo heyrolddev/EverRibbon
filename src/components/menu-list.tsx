@@ -5,7 +5,9 @@ import { money } from "@/lib/format";
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
+import Link from "next/link";
 import { useCart } from "@/lib/cart-context";
+import { askHref, quoteFirst } from "@/lib/ordering";
 import { Stars } from "@/components/stars";
 import { LOW_STOCK_SERVINGS } from "@/lib/costing";
 import {
@@ -44,12 +46,15 @@ function MealCard({
   index,
   staff,
   tone,
+  ask,
 }: {
   product: Product;
   index: number;
   staff: boolean;
   /** Its category's colour, for the card that has no photograph yet. */
   tone: CategoryTone;
+  /** True where nothing is bought off the shelf and every job is quoted. */
+  ask: boolean;
 }) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
@@ -207,21 +212,44 @@ function MealCard({
           </span>
           {/* Nothing to add to: staff can't check out, so the button would
               only fill a cart that leads to a refusal. */}
-          {!staff && (
-            <button
-              onClick={handleAdd}
-              disabled={soldOut}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold transition-all sm:px-4 sm:py-2 sm:text-sm ${
-                soldOut
-                  ? "cursor-not-allowed bg-ink-950/10 text-ink-900/40"
-                  : added
-                    ? "bg-ok-600 text-paper-50"
+          {!staff &&
+            (ask ? (
+              /*
+                One door.
+
+                A shop that makes to order cannot take money here, because
+                here nobody has said what to print. "Add" on a graduation
+                sash was a cart that would sell it without ever asking whose
+                name goes on it.
+
+                The product travels with the link, so the form opens already
+                knowing what they tapped.
+              */
+              <Link
+                href={askHref(product.id)}
+                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold transition-all sm:px-4 sm:py-2 sm:text-sm ${
+                  soldOut
+                    ? "pointer-events-none bg-ink-950/10 text-ink-900/40"
                     : "bg-ink-950 text-paper-50 hover:bg-brand-700"
-              }`}
-            >
-              {soldOut ? "Sold out" : added ? "Added ✓" : "Add +"}
-            </button>
-          )}
+                }`}
+              >
+                {soldOut ? "Sold out" : "Ask →"}
+              </Link>
+            ) : (
+              <button
+                onClick={handleAdd}
+                disabled={soldOut}
+                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold transition-all sm:px-4 sm:py-2 sm:text-sm ${
+                  soldOut
+                    ? "cursor-not-allowed bg-ink-950/10 text-ink-900/40"
+                    : added
+                      ? "bg-ok-600 text-paper-50"
+                      : "bg-ink-950 text-paper-50 hover:bg-brand-700"
+                }`}
+              >
+                {soldOut ? "Sold out" : added ? "Added ✓" : "Add +"}
+              </button>
+            ))}
         </div>
       </div>
     </motion.li>
@@ -239,6 +267,10 @@ export function MenuList({
   known?: MenuCategory[];
 }) {
   const [query, setQuery] = useState("");
+  // Asked once for the whole list rather than per card: whether this shop
+  // sells off the shelf is a fact about the shop, not about a product.
+  const ask = quoteFirst();
+
   const [activeCategory, setActiveCategory] = useState("All");
 
   const colours = useMemo(
@@ -359,6 +391,7 @@ export function MenuList({
                 index={i}
                 staff={staff}
                 tone={colourOf(categoryOf(product.categories), colours)}
+                ask={ask}
               />
             ))}
           </AnimatePresence>

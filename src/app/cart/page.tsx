@@ -2,7 +2,8 @@
 import { money } from "@/lib/format";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { redirect, useSearchParams } from "next/navigation";
+import { ASK_PATH, quoteFirst } from "@/lib/ordering";
 import { Suspense } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCart } from "@/lib/cart-context";
@@ -10,6 +11,15 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyPan, EmptyState } from "@/components/spot-art";
 
 export default function CartPage() {
+  /*
+   * A bookmark, a back button or an old link can still reach this.
+   *
+   * Hiding a link has never been a route. Where every job is quoted there is
+   * no cart to show, so this sends people to the one door instead of
+   * rendering an empty basket they cannot do anything with.
+   */
+  if (quoteFirst()) redirect(ASK_PATH);
+
   return (
     // useSearchParams needs a Suspense boundary to keep this page static.
     <Suspense fallback={<Cart missing={null} />}>

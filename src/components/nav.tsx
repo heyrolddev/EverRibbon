@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { useState } from "react";
 import { useCart } from "@/lib/cart-context";
+import { takesCart } from "@/lib/ordering";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Logo } from "@/components/logo";
 import { ChefHatIcon } from "@/components/icons";
@@ -240,7 +241,10 @@ export function Nav({
             </Link>
           )}
 
-          {!staff && (
+          {/* A cart nobody can check out of is a link to a dead end. Where
+              every job is quoted there is no cart at all — the shop has one
+              door and this is not it. */}
+          {!staff && takesCart() && (
           <Link
             href="/cart"
             className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 transition-colors ${linkClass}`}

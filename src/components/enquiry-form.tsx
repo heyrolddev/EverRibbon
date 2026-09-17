@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { brand } from "../../config/index.ts";
+import { money } from "@/lib/format";
 import { SpecFields } from "@/components/spec-fields";
 import { missingRequired, questionsFor, scopedCategories, type SpecQuestion } from "@/lib/spec";
 import { ReferencePicker, type Reference } from "@/components/reference-picker";
@@ -22,6 +23,30 @@ import { sendEnquiry } from "@/app/enquire/actions";
  * they are likely not to know.
  */
 
+/**
+ * A numbered heading.
+ *
+ * Three of them, and that is the point: a form whose end you can see is a
+ * form people finish. This one has six fields and two of them are optional,
+ * but without the numbers it reads as "scroll until something happens".
+ */
+function Step({ n, of, title, children }: { n: number; of: number; title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-3xl bg-paper-100 p-6 ring-1 ring-ink-950/10 sm:p-8">
+      <p className="flex items-center gap-2.5">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--accent-fill)] font-mono text-[11px] font-black text-[var(--on-accent)]">
+          {n}
+        </span>
+        <span className="font-display text-lg font-black text-ink-950">{title}</span>
+        <span className="ml-auto font-mono text-[11px] text-ink-900/40">
+          {n} / {of}
+        </span>
+      </p>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
 const field =
   "w-full rounded-xl border border-ink-950/15 bg-paper-50 px-4 py-3 text-sm " +
   "text-ink-950 outline-none placeholder:text-ink-900/35 focus:border-brand-600";
@@ -31,19 +56,25 @@ export function EnquiryForm({
   questions,
   today,
   defaults,
+  picked,
 }: {
   questions: SpecQuestion[];
   /** The shop's today, so the date picker cannot offer yesterday. */
   today: string;
   /** What we already know, when somebody is signed in. */
   defaults: { name: string; phone: string };
+  /** What they tapped on the catalogue, when they came from there. */
+  picked?: { name: string; from: number; categories: string[] } | null;
 }) {
   const [name, setName] = useState(defaults.name);
   const [phone, setPhone] = useState(defaults.phone);
-  const [wants, setWants] = useState("");
+  const [wants, setWants] = useState(picked?.name ?? "");
   const [qty, setQty] = useState(1);
   const [needBy, setNeedBy] = useState("");
-  const [kind, setKind] = useState("");
+  // The kind of work comes with the product they tapped, so the right
+  // questions are already on screen rather than behind a dropdown nobody
+  // knows to open.
+  const [kind, setKind] = useState(picked?.categories[0] ?? "");
   const [spec, setSpec] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<Reference[]>([]);
   /*
@@ -59,6 +90,10 @@ export function EnquiryForm({
   const [sent, setSent] = useState<{ ticket: number | null; token: string | null } | null>(null);
 
   const kinds = scopedCategories(questions);
+  // Two steps or three, decided by whether this shop asks anything. A "2 / 3"
+  // over a step that does not exist is worse than no number at all.
+  const hasQuestions = kinds.length > 0 || questionsFor(questions, []).length > 0;
+  const steps = hasQuestions ? 3 : 2;
   const asked = questionsFor(questions, kind ? [kind] : []);
   const gaps = missingRequired(asked, spec).map((q) => q.key);
 
@@ -143,9 +178,20 @@ export function EnquiryForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-3xl bg-paper-100 p-6 ring-1 ring-ink-950/10 sm:p-8">
+      <Step n={1} of={steps} title="What would you like?">
+        {/* What they tapped, so the form opens knowing it. The price is a
+            FROM and never a total: the real one depends on the answers
+            below, which is the whole reason this page exists. */}
+        {picked && (
+          <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-paper-50 px-4 py-3 text-sm ring-1 ring-ink-950/10">
+            <span className="font-bold text-ink-950">{picked.name}</span>
+            {picked.from > 0 && (
+              <span className="text-ink-900/60">from {money(picked.from)}</span>
+            )}
+          </p>
+        )}
         <label className="flex flex-col gap-1.5">
-          <span className={tag}>What would you like?</span>
+          <span className={tag}>In your own words</span>
           <textarea
             rows={3}
             value={wants}
@@ -182,10 +228,13 @@ export function EnquiryForm({
           </label>
         </div>
 
-        {/* The shop's own questions, if it has any. A shop that asks nothing
-            gets no panel rather than an empty heading. */}
-        {(kinds.length > 0 || asked.length > 0) && (
-          <div className="mt-6 border-t border-ink-950/10 pt-5">
+      </Step>
+
+      {/* The shop's own questions, if it has any. A shop that asks nothing
+          gets two steps rather than an empty third. */}
+      {hasQuestions && (
+        <Step n={2} of={steps} title="A few details">
+          <div>
             {kinds.length > 0 && (
               <label className="flex flex-col gap-1.5">
                 <span className={tag}>What kind of work is it?</span>
@@ -215,10 +264,10 @@ export function EnquiryForm({
               <span className="font-bold text-brand-700">*</span> we do need.
             </p>
           </div>
-        )}
-      </section>
+        </Step>
+      )}
 
-      <section className="rounded-3xl bg-paper-100 p-6 ring-1 ring-ink-950/10 sm:p-8">
+      <Step n={steps} of={steps} title="How we reach you">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className={tag}>Your name</span>
@@ -256,7 +305,7 @@ export function EnquiryForm({
         </div>
 
         {error && <p className="mt-4 text-sm font-semibold text-bad-700">{error}</p>}
-      </section>
+      </Step>
     </div>
   );
 }

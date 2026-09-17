@@ -7,11 +7,23 @@ import { getDeliverySettings } from "@/lib/delivery-server";
 import { getPaymentSettings } from "@/lib/payments-server";
 import { getSchedule } from "@/lib/hours-server";
 
+import { redirect } from "next/navigation";
+import { ASK_PATH, quoteFirst } from "@/lib/ordering";
 import { privatePage } from "@/lib/seo";
 
 export const metadata = privatePage("Checkout");
 
 export default async function CheckoutPage() {
+  /*
+   * The door this shop does not have.
+   *
+   * A checkout takes money for something the customer has described to
+   * nobody. Where every job is quoted, the price arrives after the shop has
+   * seen what is being asked for — so this sends them to the form that asks,
+   * rather than to a payment page for a job that has no price yet.
+   */
+  if (quoteFirst()) redirect(ASK_PATH);
+
   if (!isConfigured()) {
     return (
       <main className="flex-1">

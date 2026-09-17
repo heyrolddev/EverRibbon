@@ -1,5 +1,6 @@
 "use client";
 
+import { brand } from "../../config/index.ts";
 import { connectPrinter, sendJob, type Connection } from "@/lib/bluetooth-printer";
 import { chunk, encodeReceipt } from "@/lib/escpos";
 import { renderReceipt, type Receipt } from "@/lib/receipt";
@@ -67,7 +68,9 @@ export function disconnect() {
 
 /* ---------------- print automatically after a sale ---------------- */
 
-const AUTO_KEY = "pepperpan.autoprint";
+// From the config key, like the cart's and the chat's: hardcoded, two shops
+// on one tablet shared a printer setting.
+const AUTO_KEY = `${brand.key}.autoprint`;
 let auto: boolean | null = null;
 
 /** The server has no localStorage, so it always answers "off". */

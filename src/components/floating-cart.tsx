@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { AdminDialog } from "@/components/admin-dialog";
 import { useCart } from "@/lib/cart-context";
+import { takesCart } from "@/lib/ordering";
 
 
 /**
@@ -37,7 +38,10 @@ export function FloatingCart({ staff = false }: { staff?: boolean }) {
   const onCheckoutFlow = pathname === "/cart" || pathname === "/checkout";
   // Staff can't order at all, so a bar inviting them to check out is a button
   // that leads to a refusal.
-  const show = items.length > 0 && !onCheckoutFlow && !staff;
+  // And nothing at all where nothing is bought off the shelf: a bar
+  // inviting somebody to check out, in a shop with no checkout, is the
+  // second door this system deliberately no longer has.
+  const show = items.length > 0 && !onCheckoutFlow && !staff && takesCart();
 
   // Emptying the last line closes the sheet by itself. A review of nothing is
   // a dialog asking to be dismissed, and the bar behind it has gone too.

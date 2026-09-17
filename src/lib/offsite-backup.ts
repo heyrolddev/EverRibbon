@@ -150,7 +150,7 @@ export async function sendOffsiteBackup(): Promise<SendResult> {
           : {
               attachments: [
                 {
-                  filename: `pepperpan-backup_${stamp}.json`,
+                  filename: `${brand.key}-backup_${stamp}.json`,
                   content: Buffer.from(payload, "utf8").toString("base64"),
                 },
               ],

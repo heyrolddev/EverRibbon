@@ -196,3 +196,45 @@ test('"use client" is still the first statement wherever it appears', () => {
   }
   assert.deepEqual(offenders, [], `"use client" must lead the file:\n${offenders.join("\n")}`);
 });
+
+test("no other shop's name is baked into src/", () => {
+  /*
+   * The existing sweep bans the ACTIVE brand's values, which is what stops a
+   * shop's own name being welded into a page. It never noticed the opposite:
+   * another shop's key, left behind by whoever ported the code.
+   *
+   * Four had survived — the cart's storage key, the chat's guest key, the
+   * printer's autoprint flag and every backup filename. None of them looked
+   * like anything. The symptom is two shops open on one phone sharing a
+   * basket, and a backup file named after a business that does not own it.
+   */
+  // The brand the sweep above is written against, so the two agree about
+  // which name is this shop's and which is somebody else's.
+  const mine = resolveBrand("everribbon").key;
+  const others = Object.keys(BRANDS).filter((k) => k !== mine);
+  const offenders: string[] = [];
+
+  for (const file of files) {
+    const src = readFileSync(file, "utf8");
+    src.split("\n").forEach((line, i) => {
+      // The same escape hatch the sweep above offers, for the same reason:
+      // an exception that is genuinely right stays possible and stays
+      // greppable. The one that exists is a file-format stamp written by an
+      // older app, which is a fact about a file and not about this shop.
+      if (/brand-literal-ok/.test(line)) return;
+      for (const key of others) {
+        // Word-ish boundaries so a word that merely contains the key —
+        // improbable, but the guard should say what it means — is not a hit.
+        if (new RegExp(`\\b${key}\\b`, "i").test(line)) {
+          offenders.push(`${relative(ROOT, file)}:${i + 1} — "${key}" belongs to another shop`);
+        }
+      }
+    });
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `another shop's name is in src/:\n${offenders.join("\n")}`
+  );
+});

@@ -477,14 +477,14 @@ export function CheckoutForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          placeholder="Extra spicy, no onions, call when outside…"
+          placeholder="Anything we should know — a landmark, a time, a preference"
           className={fieldClass}
         />
       </label>
 
       <div className="flex flex-col gap-2 rounded-3xl bg-ink-950 px-6 py-5 text-paper-50">
         <div className="flex items-center justify-between text-sm text-paper-100/70">
-          <span>Food</span>
+          <span>{brand.copy.catalogue}</span>
           <span>{money(total)}</span>
         </div>
         {isDelivery && (

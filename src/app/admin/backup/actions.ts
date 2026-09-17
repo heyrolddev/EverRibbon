@@ -72,8 +72,8 @@ export async function restoreFromBackup(text: string): Promise<RestoreResult> {
   if ("error" in parsed) return { error: parsed.error };
 
   // Which of the two shapes this is, decided from the file's own table names
-  // rather than from anything the owner had to know. Both say
-  // `app: "PepperPan"`, because both are this shop's; only the old phone app
+  // rather than from anything the owner had to know. `readBackup` has
+  // already accepted the `app` stamp either way; only the old phone app
   // writes `inventory` and `cashLedger`.
   const kind = detectBackupKind(parsed) === "legacy" ? "legacy" : "native";
   const converted = kind === "legacy" ? convertLegacyBackup(parsed) : null;
