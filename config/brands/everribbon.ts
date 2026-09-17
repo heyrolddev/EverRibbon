@@ -1,7 +1,7 @@
 import type { BrandConfig } from "../schema.ts";
 
 /**
- * EverRibbon — ribbon printing and ribbon flower bouquets, Pampanga.
+ * EverRibbon — ribbon printing and ribbon flower bouquets, Calumpit, Bulacan.
  *
  * The palette is not invented. Every colour below is a ribbon or foil the shop
  * already buys, so the brand and the purchase order cannot drift apart:

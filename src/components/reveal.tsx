@@ -1,7 +1,8 @@
 "use client";
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { usePrefersReducedMotion } from "@/lib/reduced-motion";
 
 type Direction = "up" | "down" | "left" | "right" | "scale";
 
@@ -24,23 +25,33 @@ export function Reveal({
   direction?: Direction;
   className?: string;
 }) {
-  // Someone who has asked their device for less motion gets the content in
-  // place, with no slide and no fade.
-  //
-  // This does not, on its own, stop a card sitting 36px off to the side while
-  // it waits to be scrolled into view: the preference is only known after
-  // mount, so the first render still carries the offset. What stops that from
-  // becoming a page you can drag sideways is the overflow guard in
-  // globals.css. This is here for the motion, not the layout.
-  const still = useReducedMotion();
-  const from = still ? {} : offsets[direction];
+  /*
+   * Someone who has asked their device for less motion gets the content put
+   * in place, with no slide and no fade.
+   *
+   * The preference changes the TRANSITION and never the initial state, which
+   * is the whole fix here. It used to switch `initial` between an offset and
+   * `false` — and because the preference is only knowable on the client, the
+   * server rendered one and the browser hydrated the other. React reported a
+   * mismatch and threw the whole tree away to rebuild it on the client, for
+   * exactly the visitors who asked for less work rather than more. Both sides
+   * now render the same thing, and the preference only decides how long it
+   * takes to arrive: no time at all.
+   *
+   * `usePrefersReducedMotion` rather than motion's own hook for the same
+   * reason — that one reads the media query on the first client render, which
+   * is precisely when it must agree with a server that had no media query.
+   */
+  const still = usePrefersReducedMotion();
 
   return (
     <motion.div
-      initial={still ? false : { opacity: 0, ...from }}
+      initial={{ opacity: 0, ...offsets[direction] }}
       whileInView={{ opacity: 1, x: 0, y: 0, scale: 1 }}
       viewport={{ once: true, margin: "-80px" }}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
+      transition={
+        still ? { duration: 0 } : { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }
+      }
       className={className}
     >
       {children}

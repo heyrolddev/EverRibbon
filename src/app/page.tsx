@@ -22,6 +22,7 @@ import { FaqAccordion } from "@/components/faq-accordion";
 import { SocialLinks } from "@/components/social-links";
 import { Stars } from "@/components/stars";
 import { Reveal } from "@/components/reveal";
+import { RibbonBloom } from "@/components/ribbon-bloom";
 
 /**
  * The shopfront.
@@ -165,60 +166,87 @@ export default async function Home() {
   return (
     <main className="flex-1">
       {/* ------------------------------------------------------------ hero -- */}
-      <section className="under-nav grain relative overflow-hidden bg-ink-950 text-paper-100">
+      {/*
+        Full height and mostly empty, on purpose.
+
+        The shop this replaces sold from a stall, where the thing itself was
+        the advert. On a screen the equivalent is space: a page that crowds
+        four messages above the fold is a page that reads as a flyer, and a
+        flyer is not what somebody spending four figures on a graduation
+        wants to have found. So there is one picture, one sentence, and one
+        thing to do.
+      */}
+      <section className="under-nav grain relative flex min-h-[100svh] items-center overflow-hidden bg-ink-950 text-paper-100">
         <div
           aria-hidden
-          className="hero-grid pointer-events-none absolute inset-0 opacity-30"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -left-40 top-0 h-[36rem] w-[36rem] rounded-full bg-brand-700/25 blur-3xl"
+          className="hero-grid pointer-events-none absolute inset-0 opacity-20"
         />
 
-        <div className="relative mx-auto flex max-w-5xl flex-col items-start gap-7 px-6 py-24 sm:py-32">
-          <p className="rounded-full bg-paper-100/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-paper-100/70">
-            {brand.copy.badge}
-          </p>
+        <div className="relative mx-auto grid w-full max-w-7xl items-center gap-y-12 px-6 py-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-x-16 lg:py-24">
+          {/* ---------------------------------------------------- the words -- */}
+          <div className="order-2 flex flex-col items-start gap-8 lg:order-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.34em] text-brand-400/80">
+              {brand.copy.badge}
+            </p>
 
-          <Logo ground="dark" width={520} priority className="h-auto w-[min(100%,26rem)]" />
+            <Logo ground="dark" width={520} priority className="h-auto w-[min(100%,22rem)]" />
 
-          <p className="max-w-[24ch] font-display text-3xl leading-[1.12] text-paper-100 sm:text-5xl">
-            {brand.tagline}
-          </p>
+            {/*
+              The tagline set as the headline, not as a subtitle under the
+              mark. It is the only sentence on this screen that says what the
+              shop is FOR, and the mark above it only says who.
+            */}
+            <h1 className="max-w-[16ch] text-balance font-display text-[clamp(2.6rem,6.2vw,4.75rem)] font-black leading-[0.98] tracking-[-0.02em] text-paper-100">
+              {brand.tagline}
+            </h1>
 
-          <p className="max-w-[54ch] text-base leading-relaxed text-paper-100/65 sm:text-lg">
-            {brand.description}
-          </p>
+            <p className="max-w-[46ch] text-base leading-[1.75] text-paper-100/60 sm:text-lg">
+              {brand.description}
+            </p>
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <Link
-              href="/menu"
-              className="rounded-full bg-[var(--accent-fill)] px-7 py-3.5 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
-            >
-              See the {catalogue.toLowerCase()}
-            </Link>
-            <a
-              href={`tel:${brand.contact.phoneHref}`}
-              className="rounded-full px-7 py-3.5 text-sm font-bold text-paper-100 ring-1 ring-paper-100/30 transition-colors hover:bg-paper-100/10"
-            >
-              {madeToOrder ? "Ask about a custom order" : "Call us"}
-            </a>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Link
+                href="/menu"
+                className="rounded-full bg-[var(--accent-fill)] px-8 py-4 text-sm font-bold text-[var(--on-accent)] transition-transform hover:scale-105"
+              >
+                See the {catalogue.toLowerCase()}
+              </Link>
+              <a
+                href={`tel:${brand.contact.phoneHref}`}
+                className="rounded-full px-7 py-4 text-sm font-bold text-paper-100 ring-1 ring-paper-100/25 transition-colors hover:bg-paper-100/10"
+              >
+                {madeToOrder ? "Ask about a custom order" : "Call us"}
+              </a>
+            </div>
           </div>
 
-          {/* The shop's own claims, from the one list that also feeds the
-              scrolling strip. Set as quiet chips rather than as a second
-              headline: they are supporting evidence, not the promise. */}
-          <ul className="flex flex-wrap gap-2 pt-4">
-            {brand.copy.strip.map((item) => (
-              <li
-                key={item}
-                className="rounded-full border border-paper-100/15 px-3.5 py-1.5 text-xs text-paper-100/60"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
+          {/* ---------------------------------------------------- the bloom -- */}
+          {/*
+            First on a phone and second on a desktop. Vertically it is the
+            thing worth leading with; horizontally the words have to come
+            first, because a left-to-right reader who meets the picture first
+            has to come back for them.
+          */}
+          <div className="order-1 flex justify-center lg:order-2 lg:justify-end">
+            <RibbonBloom className="aspect-square w-[min(92vw,27rem)] lg:w-[min(46vw,40rem)]" />
+          </div>
         </div>
+
+        {/* The only instruction on the screen, and it is one word. A hero
+            this tall has to say there is something under it — and since it
+            has to be drawn anyway, it may as well take you there. */}
+        <a
+          href="#catalogue"
+          className="group absolute inset-x-0 bottom-7 mx-auto hidden w-fit flex-col items-center gap-2 sm:flex"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-[0.34em] text-paper-100/35 transition-colors group-hover:text-paper-100/70">
+            Scroll
+          </span>
+          <span
+            aria-hidden
+            className="h-8 w-px bg-gradient-to-b from-paper-100/35 to-transparent"
+          />
+        </a>
       </section>
 
       {/* The live band. Falls back to the standing lines, so it is never an
@@ -229,7 +257,7 @@ export default async function Home() {
       />
 
       {/* ------------------------------------------------------- catalogue -- */}
-      <section id="catalogue" className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
+      <section id="catalogue" className="mx-auto max-w-6xl px-6 py-28 sm:py-40">
         <Reveal>
           <header className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -252,7 +280,7 @@ export default async function Home() {
         </Reveal>
 
         {products.length > 0 ? (
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p, i) => (
               <Reveal key={p.id} delay={i * 0.06}>
                 <Link
@@ -326,7 +354,7 @@ export default async function Home() {
 
       {/* -------------------------------------------------- how it works -- */}
       {hasProcess && (
-      <section id="how" className="bg-paper-100 py-20 sm:py-28">
+      <section id="how" className="bg-paper-100 py-28 sm:py-40">
         <div className="mx-auto max-w-6xl px-6">
           <Reveal>
             <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-brand-700">
@@ -354,7 +382,7 @@ export default async function Home() {
 
       {/* ---------------------------------------------------------- proof -- */}
       {reviewSummary.count > 0 && (
-        <section className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
+        <section className="mx-auto max-w-6xl px-6 py-28 sm:py-40">
           <Reveal>
             <header className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -384,7 +412,7 @@ export default async function Home() {
       )}
 
       {/* ----------------------------------------------------------- find -- */}
-      <section id="visit" className="bg-ink-950 py-20 text-paper-100 sm:py-28">
+      <section id="visit" className="bg-ink-950 py-28 text-paper-100 sm:py-40">
         <div className="mx-auto grid max-w-6xl gap-12 px-6 lg:grid-cols-2">
           <Reveal>
             <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-brand-400">
@@ -459,7 +487,7 @@ export default async function Home() {
 
       {/* ------------------------------------------------------------ faq -- */}
       {faqRows.length > 0 && (
-        <section className="mx-auto max-w-3xl px-6 py-20 sm:py-28">
+        <section className="mx-auto max-w-3xl px-6 py-28 sm:py-40">
           <Reveal>
             <h2 className="font-display text-3xl font-black text-ink-950 sm:text-4xl">
               Before you ask
