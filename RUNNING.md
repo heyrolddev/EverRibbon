@@ -98,8 +98,24 @@ Settings → Environment Variables**, plus:
 | `NEXT_PUBLIC_SITE_URL` | the real address, once there is a domain |
 
 `NEXT_PUBLIC_SITE_URL` is what share cards and canonical links are built
-from. Until a domain exists it can be left unset — the deployment's own URL
-is used instead, so sharing works before anything has been bought.
+from. Until a domain exists **leave it out entirely** rather than setting it
+empty — `siteUrl()` falls back to Vercel's own production URL, so sharing
+works before anything has been bought.
+
+**Creating the project does not deploy it.** The import screen makes the
+project and connects the repository, and then the Overview says "No
+Production Deployment — your Production Domain is not serving traffic",
+which reads like a failure and is not one. There is simply nothing to serve
+yet. Vercel builds on a push, so the first deployment is the first commit
+that lands on `main` after the project exists:
+
+```bash
+git commit --allow-empty -m "Trigger the first deployment"
+git push origin main
+```
+
+Any real commit does it too. After that every push to `main` deploys by
+itself, which is the whole arrangement.
 
 ### The receipts already in the public bucket
 
