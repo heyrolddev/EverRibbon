@@ -126,20 +126,52 @@ the confirmation are still on the order. Do not move the files into the
 private bucket by hand: the rows point at the public URL, so the link would
 break rather than start working.
 
-### Before you announce it
+### Deploying and announcing are not the same day
+
+Deploy as soon as it builds. The address is unguessable until you give it to
+somebody, and it is the only way to test the one thing no amount of checking
+here can: this site against **your** database, with your products, your
+questions and your storage bucket. Nothing below has to be true to deploy.
+
+Announcing is the other day. These are what make the site useful rather than
+honest-but-empty:
 
 - [ ] `supabase/seeds/shop-setup.sql` filled in and run
 - [ ] The logo uploaded, both grounds (HQ → Logo)
 - [ ] The delivery pin dropped (HQ → Delivery) — until it is, delivery is
       offered to nobody, on purpose
 - [ ] Opening hours set (HQ → Hours)
-- [ ] The quote desk's questions checked (HQ → What to ask) — these are what
-      the shop asks about a custom job, and the answers travel with the order
-      onto the board, the proof photo and the customer's own page
+- [ ] The questions checked (HQ → What to ask) — these are what a customer is
+      asked on the order form, and the answers travel with the order onto the
+      board, the proof photo and the customer's own page
 - [ ] Payment details set (HQ → Payments) — GCash name and number
-- [ ] One test order placed end to end, and moved through every step
+- [ ] Material costs and assembly minutes entered (HQ → Inventory) — without
+      them the quote desk reads every job as near-pure margin and says so
 - [ ] Product photographs uploaded (HQ → Shop). Prices are already loaded
       from the catalogue seed; the photographs are what sell them
+
+### The one test that matters
+
+A made-to-order shop has one path, and this walks all of it. Ten minutes, on
+a phone, on the deployed site — not on a laptop, because a phone is where
+every real one of these happens.
+
+1. **Ask.** Open `/enquire`, fill it in, attach a photo, send. You should get
+   a ticket number and a link. The private storage bucket is created by this
+   first upload, so this is also the step that proves storage works.
+2. **Check the link.** Open it. It should show what you asked for and say
+   there is no price yet.
+3. **Find it.** HQ → Orders. The answers and the photo should be on the card,
+   with **Put a price on this**.
+4. **Price it.** The desk opens with everything they told you already in it.
+   Save.
+5. **Check the link again.** The price should be there, with what stands
+   until when.
+6. **Send a proof** from the order card, then move the order through every
+   remaining step to Delivered.
+
+If any step does something other than that, the exact message is worth more
+than a description of it.
 
 None of these break the site by being missing. Each one is a place where the
 site currently says something honest and unhelpful instead of something
